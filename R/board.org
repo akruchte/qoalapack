@@ -1,0 +1,10 @@
+* Covariate Representaitons
+- raster data
+- compositional census data
+- background smooth
+- topological surface
+- point process exposure
+  
+* Simulation
+
+* Estimand topology

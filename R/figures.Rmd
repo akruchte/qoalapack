@@ -1,0 +1,17 @@
+```{r}
+library(spatstat)
+library(sf)
+library(tidyverse)
+```
+
+```{r}
+process <- swedishpines
+
+q <- quadscheme(process)
+
+
+points <- st_as_sf(q$data)[-1,]
+dummy <- st_as_sf(q$dummy)[-1, ]
+
+ggplot() + geom_sf
+```
