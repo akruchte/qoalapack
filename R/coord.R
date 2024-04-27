@@ -1,4 +1,13 @@
 
+#' 2d coordinates object
+#'
+#' @param x A number
+#' @param y A number
+#'
+#' @return coord
+#' @export
+#'
+#' @examples
 coord <- function(x = double(), y = double()){
     vec_assert(x, ptype = double())
     vec_assert(y, ptype = double())
@@ -7,6 +16,15 @@ coord <- function(x = double(), y = double()){
 }
 
 
+#' Title
+#'
+#' @param x 
+#' @param ... 
+#'
+#' @return
+#' @export
+#'
+#' @examples
 vec_ptype_abbr.coord <- function(x, ...){
     'coord'
 }

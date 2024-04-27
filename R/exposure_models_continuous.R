@@ -1,9 +1,3 @@
-library(tidyverse)
-library(sf)
-library(stars)
-library(mgcv)
-
-source('distributions.R')
 
 ## example
 if(FALSE){

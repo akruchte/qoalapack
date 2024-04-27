@@ -1,5 +1,3 @@
-source('outcome_models.R')
-
 
 s <- swedishpines
 
