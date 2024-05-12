@@ -74,9 +74,9 @@ Rcov <- function(..., interpolator = c('bilin', 'bin', 'spatstat')) {
   interpolator <- match.arg(interpolator, interpolator)
   object_types <- length(unique(lapply(rasters, class)))
   if (object_types != 1L) stop('Rcov requires all arguments be of the same type.\n Try using Rcov multiple times for each type of argument.')
-  
+
   rasters <- lapply(rasters, convert_raster)
-  
+
   new_rcrd(list(rasters = rasters),
            interpolator = interpolator,
            class = c('Rcov', 'spatial_covariate'))
@@ -84,16 +84,16 @@ Rcov <- function(..., interpolator = c('bilin', 'bin', 'spatstat')) {
 
 evaluate.Rcov <- function(object, locations, ...){
   stopifnot(is_coord(locations))
-  
+
   x <- coordx(locations)
   y <- coordy(locations)
-  
+
   rasters <- field(object, 'rasters')
   interpolator <- switch(attr(object, 'interpolator'),
                          'bilin' = function(r) interp.im(r, x,y, bilinear = TRUE),
                          'bin' = r[x,y],
                          'spatstat' = function(r) interp.im(r, x,y, bilinear = FALSE))
-  
+
   do.call(c, lapply(rasters, interpolator))
 }
 
@@ -131,9 +131,9 @@ convert_raster.default <- function(object, ...){
 
 
 
-#' @param object 
+#' @param object
 #'
-#' @param ... 
+#' @param ...
 #'
 #' @export
 evaluate <- function(object, ...){
@@ -164,11 +164,11 @@ evaluate.spatial_covariate <- function(object, ...){
 ## different in interpretation and use that they are divided into completely seperate classes
 #' Title
 #'
-#' @param object 
-#' @param W 
-#' @param dimyx 
-#' @param fractional 
-#' @param normalize 
+#' @param object
+#' @param W
+#' @param dimyx
+#' @param fractional
+#' @param normalize
 #'
 #' @return
 #' @export
@@ -221,14 +221,6 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
 
 
 ## Pcov
-library(rlang)
-library(vctrs)
-library(spatstat.core)
-source('utilities.R')
-source('covariate_placeholder.R')
-source('coord.R')
-source('covariate_types.R')
-
 
 
 ## a number of vctrs methods need to still be added for Pcovs, such as restore methods etc
@@ -252,11 +244,11 @@ Pcov <- function(..., W , dimyx, fractional = FALSE ){
   prepped <- vector('list', length = length(covars))
   for (i in seq_along(covars)){
     covar <- covars[[i]]
-    
+
     prepped[[i]] <- Pcov_prepare(covar, W, dimyx, fractional)
-    
+
   }
-  
+
   new_rcrd(list(pcov = prepped),
            class = c('Pcov', 'spatial_covariate'))
 }
@@ -271,13 +263,13 @@ Pcov_prepare <- function(object, W, dimyx, fractional){
 
 ## Pcov should be evaluable when provided with a parametrically chosen kernel
 evaluate.Pcov <- function(object, locations, kernel, ...){
-  
+
   evaluate_single <- function(p, kernel, locations){
     conved <- fft(fft(kernel(p$distances)) * p$covariate, inverse = TRUE) / prod(p$dims)
     pim <- as.im(Re(matrix(conved[1:p$dims[[1]], 1:p$dims[[2]]])), W = p$window, dimyx = p$dimyx)
-    interp.im(pim, coordx(locations), coordy(locations)) 
+    interp.im(pim, coordx(locations), coordy(locations))
   }
-  
+
   pred <- map(field(object, 'pcov'), function(p) evaluate_single(p, kernel, locations))
   reduce(pred, c)
 }
@@ -348,7 +340,7 @@ as_Fcov.Lcov <- function(object, kernel, ...){
 Fcov <- function(..., formula, method, family){
   object <- list2(...)
   fitted <- lapply(object, function(ob) Fcov_prepare(ob, ...))
-  
+
   new_rcrd(list(fitted = fitted), class = c('Fcov', 'spatial_covariate'))
 }
 
@@ -365,7 +357,7 @@ format.Fcov <- function(ob, ...){
     return(Fcov(!!!result))
   }
   if(inherits(ob2, 'Fcov')){
-    
+
     result <- map2(field(ob, 'fitted'),
                    field(ob2, 'fitted'),
                    function(f1, f2) function(x,y) f1(x,y) + f2(x,y))
@@ -383,7 +375,7 @@ format.Fcov <- function(ob, ...){
     return(Fcov(!!!result))
   }
   if(inherits(ob2, 'Fcov')){
-    
+
     result <- map2(field(ob, 'fitted'),
                    field(ob2, 'fitted'),
                    function(f1, f2) function(x,y) f1(x,y) * f2(x,y))
@@ -400,7 +392,7 @@ format.Fcov <- function(ob, ...){
     return(Fcov(!!!result))
   }
   if(inherits(ob2, 'Fcov')){
-    
+
     result <- map2(field(ob, 'fitted'),
                    field(ob2, 'fitted'),
                    function(f1, f2) function(x,y) f1(x,y) - f2(x,y))
@@ -417,7 +409,7 @@ format.Fcov <- function(ob, ...){
     return(Fcov(!!!result))
   }
   if(inherits(ob2, 'Fcov')){
-    
+
     result <- map2(field(ob, 'fitted'),
                    field(ob2, 'fitted'),
                    function(f1, f2) function(x,y) f1(x,y) / f2(x,y))
@@ -458,7 +450,7 @@ Fcov_prepare.data.frame <- function(data, formula, method, family){
   method(formula, family = family, data = data)
 }
 basis_select <- function(...){
-  
+
 }
 
 
@@ -497,7 +489,7 @@ basis_select <- function(...){
 Ecov <- function(..., outcome) {
   object <- rlang::list2(...)
   fitted <- lapply(object, function(ob) Ecov_prepare(ob, ...))
-  
+
   vctrs::new_rcrd(list(outcome), class = c('Ecov', 'spatial_covariate'))
 }
 
@@ -526,20 +518,20 @@ format.Ecov <- function(ob, ...){
 
 Lcov <- function(..., W = NULL, dimyx = c(128, 128)){
   covars <- list2(...)
-  
+
   for (i in seq_along(covars)){
     covar <- covars[i]
-    
+
     covar[[i]] <- Lcov_prepare(covar[[i]], W, dimyx, fractional)
   }
-  
+
   new_rcrd(list(pcov = covars),
            class = c('Lcov', 'spatial_covariate'))
 }
 
 ## Lcov should be evaluable when provided with a parametrically chosen kernel
 evaluate.Lcov <- function(object, locations, kernel, ...){
-  
+
 }
 
 
@@ -599,9 +591,9 @@ Rcov <- function(..., interpolator = c('bilin', 'bin', 'spatstat')) {
   interpolator <- match.arg(interpolator, interpolator)
   object_types <- length(unique(lapply(rasters, class)))
   if (object_types != 1L) stop('Rcov requires all arguments be of the same type.\n Try using Rcov multiple times for each type of argument.')
-  
+
   rasters <- lapply(rasters, convert_raster)
-  
+
   new_rcrd(list(rasters = rasters),
            interpolator = interpolator,
            class = c('Rcov', 'spatial_covariate'))
@@ -609,16 +601,16 @@ Rcov <- function(..., interpolator = c('bilin', 'bin', 'spatstat')) {
 
 evaluate.Rcov <- function(object, locations, ...){
   stopifnot(is_coord(locations))
-  
+
   x <- coordx(locations)
   y <- coordy(locations)
-  
+
   rasters <- field(object, 'rasters')
   interpolator <- switch(attr(object, 'interpolator'),
                          'bilin' = function(r) interp.im(r, x,y, bilinear = TRUE),
                          'bin' = r[x,y],
                          'spatstat' = function(r) interp.im(r, x,y, bilinear = FALSE))
-  
+
   do.call(c, lapply(rasters, interpolator))
 }
 
