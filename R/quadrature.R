@@ -1,4 +1,5 @@
 library(sf)
+
 ## construct quadrature schemes for point process valued outcomes
 ## quadscheme from spatstat only handles the purely 2d case, we need to handle temporal, but also other mark variables such as age, sex, etc
 
@@ -7,11 +8,13 @@ library(sf)
 ## directly use spatstat on the unioned points
 quadrature <- function(outcomes, ...){
 
-    
+
     quad_points <- outcomes
-    ## quad_grid <- 
-    
+    ## quad_grid <-
+
 }
+
+
 
 ## Ideally this should be able to be constructed adaptively based on data sparsity etc
 

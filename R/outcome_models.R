@@ -1,7 +1,4 @@
-source('covariate_placeholder.R')
 source('covariate_types.R')
-source('Pcov.R')
-source('Fcov.R')
 source('utilities.R')
 ## examples for documentation
 RUN <- FALSE
@@ -13,6 +10,7 @@ if(RUN) {
 
 library(mgcv)
 library(pracma)
+library(abind)
 
 
 library(spatstat)
@@ -30,7 +28,7 @@ outcome_model <- function(model, prediction_locations) {
     list(model = model,
           mufun = outcome_fun(model, prediction_locations))
 }
-          
+
 ## returns a function f(i) for treatment A indexed by i.
 ## f evaluates the predicted intensity at each of the originally specified locations when assigned a treatment value of A
 ## expects that the model have treatment provided as the first term
@@ -43,10 +41,10 @@ outcome_fun <- function(omodel, prediction_locations){
     treat_term <- mu[,1]
 
     mu_term <- rowSums(as.matrix(mu[,-1])) + attr(mu, 'constant')
-    
+
     denominator_mu <- linkinv(mu)
     ## homoskedastic normal case
-    
+
     ## mufun is a function that predicts the potential outcome, at covariate values corresponding to those at each and every of the provided prediction locations
     ## For each prediction location it returns the predicted value corresponding to the ith level of the observed treatments if the argument i is provide.
     ## if a is provided, it predicts on the basis of the value of a
@@ -103,10 +101,10 @@ outcome_control <- function(quadrature_control,
 ppmod <- function(Y, Q, ppcov, covariates = NULL, dimyx = c(128, 128), k = NULL, bs = 'tp') {
     stopifnot(!is.null(names(ppcov)))
     stopifnot(is.list(ppcov))
-              
+
     prep <- mpl_prepare(Y, Q, ppcov, covariates, dimyx)
     ppcov_list <- names(ppcov)
-    
+
 
     ppcov <- map_chr(ppcov_list, function(str) paste0('s(', str, ', bs = c("conv", bs), k = ', k,')'))
 
@@ -136,7 +134,7 @@ print.ppmod <- function(object) {
     cat(glue('Quadrature scheme with {npoints(object$Q$dummy)} control points.\n\n'))
 
     cat(glue('Point process valued covariates: {object$ppcov}.\n\n'))
-    
+
 }
 
 print.counterfactual <- function(object){
@@ -158,7 +156,7 @@ predict.ppmod <- function(object, newdata, ... ) {
                                              new_coords = newdata[,c('x', 'y')])
     }
 
-    
+
     predict.gam(object, newdata = newdata, ...)
 }
 
@@ -190,7 +188,7 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 
     prepped_pp_exposures <- vector(mode = 'list', length(ppcov))
     names(prepped_pp_exposures) <- names(ppcov)
-    
+
     for(i in seq_along(ppcov)) {
         imm <- Pcov(ppcov[[i]], W = Y$window, dimyx = dimyx)[[1]]
         prepped_pp_exposures[[i]] <- covariate_placeholder(imm, coords(Q))
@@ -198,7 +196,7 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 
     prepped_covariates <- vector(mode = 'list', length(ppcov))
     names(prepped_covariates) <- names(covariates)
-    
+
     for (i in seq_along(covariates)){
         covar <- covariates[[i]]
         if (is.im(covar)){
@@ -214,7 +212,7 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
             stop('Covariates must be passed as either functions of x and y arguments or images')
         }
         prepped_covariates[[i]] <- new_covar
-        
+
     }
 
     gam_data <- bind_cols(
@@ -222,7 +220,7 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
         prepped_pp_exposures,
         prepped_covariates
     )
-    
+
 
     gam_data
 }
@@ -237,12 +235,12 @@ update_exposure <- function(model, new_exposure) {
     stopifnot(is.list(new_exposure))
     if(any(is.null(names(new_exposure)))) stop('New exposures must have names')
     stopifnot(all(names(new_exposure) %in% model$ppcovs))
-    
-    
+
+
     which_covs <- model$ppcovs %in% names(new_exposure)
-    covs <- model$ppcovs[which_covs] 
-    
-    
+    covs <- model$ppcovs[which_covs]
+
+
     for (cov in covs) {
         newdata[[cov]] <- covariate_placeholder(
             Pcov(new_exposure[[cov]], model$Y, model$dim),
@@ -250,14 +248,14 @@ update_exposure <- function(model, new_exposure) {
         )
     }
     smooths <- fit$smooth
-    
+
     for(i in seq_along(smooths)){
         if(is(smooths[[i]], 'Convspline.smooth')){
             object <- smooths[[i]]
             cov <- object$term
             conv_data <- extract_data(newdata[[cov]])
 
-            
+
             new_basis <- Predict.matrix(object$internal_basis, list(distances = c(field(conv_data, 'pcov')[[1]]$distances)))
             object$interpolation_basis <- apply(
                 new_basis, 2,
@@ -273,12 +271,12 @@ update_exposure <- function(model, new_exposure) {
     }
     model$smooth <- smooths
     model$counterfactual_covs <- covs
-    
+
     if(!is(model, 'counterfactual')) class(model) <- c('counterfactual', class(model))
 
     model
 }
-            
+
 
 construct_internal_basis <- function(object, conv_data, knots){
 
@@ -299,13 +297,13 @@ construct_internal_basis <- function(object, conv_data, knots){
     ## needs to be updated to use a more coherent placeholder covariate
     basis$X <- Predict.matrix(basis, data = list(distances = c(field(conv_data, 'pcov')[[1]]$distances)))
     basis
-    
+
 }
 
 smooth.construct.area.smooth.spec <- function(object, data, knots){
     areas <- object$xt$areas
     npoints <- object$xt$npoints
-    
+
     samples <- map2_dfr(areas, seq_along(areas),
                     function(area, id) {
                         st_sample(area, npoints) |>
@@ -317,7 +315,7 @@ smooth.construct.area.smooth.spec <- function(object, data, knots){
     object$class <- 'tp.smooth.spec'
 
     internal_basis <- smooth.construct(s(X,Y), samples, knots)
-    
+
 
     ## need to turn to integral with appropriate step-sizes
     ## currently implemented with crude equirectangular approximation
@@ -329,15 +327,15 @@ smooth.construct.area.smooth.spec <- function(object, data, knots){
 }
 
 ## required mgcv function
-smooth.construct.conv.smooth.spec <- function(object, data, knots) {    
+smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     conv_data <- extract_data(data[[object$term]])
     coords <- extract_coords(data[[object$term]])
 
     basis <- construct_internal_basis(object, conv_data, knots)
     basis$internal_basis <- basis
-    
+
     basis$term <- object$term
-        
+
 
     ## fft on vector form is equivalent to the 2-dimensional fft
     ## no-need to redimension
@@ -353,7 +351,7 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
                                        coords)
     )
     class(basis) <- 'Convspline.smooth'
- 
+
     basis$X <- Predict.matrix.Convspline.smooth(basis, data)
     basis
 
@@ -361,17 +359,101 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
 
 
+## adaptive convolutions use a three dimensional convolution
+## and then add an additional adaptive surface penalty
+
+
+
+if(experiment <- FALSE){
+    adapt_resolution <- 128
+    max <-1
+    adapt_scaling <-seq(from = 0.01, to = max, length.out = adapt_resolution)
+
+    surf <- as.matrix(as.im(swedishpines))
+    arrk <- array(data = 0, dim = c(128, 128, 128))
+    adaptconv <- arrk
+    kerns  <- arrk
+    for (k in 1:adapt_resolution) {
+        arrk[,,k] <-surf
+        scale <-adapt_scaling[k]
+        dist <- outer(seq(from = -1, to = 1, length.out = 128),
+                      seq(from = -1, to = 1, length.out = 128),
+                      function(x,y) exp(sqrt(scale * (x^2 + y^2))))
+
+        kerns[,,k] <- dist
+## problem here but it'll work for now
+        adaptconv[,,k] <- Re(fft2shift(fft(fft(surf) * fft(dist), inverse = TRUE)))
+        trilinear_interp <- function(x,y, z){
+            ## get coords and do trilinear interpolation
+        }
+
+        ## z is a height function of time that determines convolutional scale.
+        ## We extend the model with regularity terms capturing adaptive structure.
+
+
+    }
+
+
+    Y <- swedishpines
+    Q <- quadscheme(Y)
+    mpl_prepare(Y, Q, ppcov = Y, covariates = NULL)
+
+
+
+
+    ## then do slice by slice convolution
+    ## is there a reason to consider 3d-convolution? It might make sense.
+
+    ## Then the resulting convolutional kernel can be identified by evaluating according to some varietal structure.
+    ## We'll assume that K(D, \alpha) where alpha is itselfa function of space.
+
+
+}
+
+smooth.construct.aconv.smooth.spec <- function(object, data, knots) {
+    conv_data <- extract_data(data[[object$term]])
+    coords <- extract_coords(data[[object$term]])
+
+    basis <- construct_internal_basis(object, conv_data, knots)
+    basis$internal_basis <- basis
+
+    basis$term <- object$term
+
+
+    ## fft on vector form is equivalent to the 2-dimensional fft
+    ## no-need to redimension
+    ## need to verify correctness still
+
+
+    basis$interpolation_basis <- apply(
+        basis$X, 2,
+        function(basis) convolve_basis(basis,
+                                       field(conv_data, 'pcov')[[1]]$covariate,
+                                       field(conv_data, 'pcov')[[1]]$dims,
+                                       field(conv_data, 'pcov')[[1]]$window,
+                                       coords)
+    )
+    class(basis) <- 'Convspline.smooth'
+
+    basis$X <- Predict.matrix.Convspline.smooth(basis, data)
+    basis
+}
+
+
+
+
+
 
 ## required mgcv function
-Predict.matrix.Convspline.smooth <- function(object, data) {
+Predict.matrix.AConvspline.smooth <- function(object, data) {
 
     ## add a secondary check, if data are passed directly as coordinates just predict directly at those points
     coords <- extract_coords(data[[object$term]])
-    
+
     interp_basis <- object$interpolation_basis
-    
+
     interped <- lapply(interp_basis, function(basis) interp.im(basis, coords))
-    ## possible alternative 
+    ## possible alternative
     ## interped <- lapply(interp_basis, function(basis) basis[ coords])
     do.call(cbind, interped)
 }

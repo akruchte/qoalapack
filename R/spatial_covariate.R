@@ -30,7 +30,9 @@ evaluate.spatial_covariate <- function(object, ...){
 ## it is used for both Lcov and Pcov
 ## Lcov and Pcov are essentially identical in representation and share most of the same code, but they are sufficiently
 ## different in interpretation and use that they are divided into completely seperate classes
-conv_prepare <- function(object, W, dimyx, fractional, normalize){
+conv_prepare <- function(object, W, dimyx, fractional, normalize, .direction.preferred = NULL){
+    if (!is.null(.direction.preferred)) stop("Preferred direction not implemented")
+
     object$window <- union.owin(object$window, W)
 
     ## DivideByPixelArea guarantees that the integral of the rasterized process equals the
@@ -70,6 +72,7 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
          angle = angle
          )
 }
+
 
 
 
