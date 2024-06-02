@@ -8,3 +8,4 @@
 * Simulation
 
 * Estimand topology
+* Bridge Sampler

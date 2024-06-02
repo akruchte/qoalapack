@@ -36,10 +36,15 @@ format.coord <- function(ob, ...){
     out
 }
 
+
+#' coordinate predicate
+#' @export
 is_coord <- function(ob, ...){
     inherits(ob, 'coord')
 }
 
+#' Convert eligible objects to coords via generic S3 interface.
+#' @export
 as_coord <- function(ob, ...){
     UseMethod('as_coord')
 }
@@ -49,10 +54,14 @@ as_coord.default <- function(ob, ...){
     vec_cast(ob, coord())
 }
 
+#'  Coordinate X
+#' @export
 coordx <- function(ob){
     field(ob, 'x')
 }
 
+#' Coordinate Y
+#' @export
 coordy <- function(ob){
     field(ob, 'y')
 }

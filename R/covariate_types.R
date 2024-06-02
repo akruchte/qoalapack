@@ -1,16 +1,7 @@
-## covariate placeholders should carry the relevant information regarding
-## the appropriate single level entity  information needed in model fitting (such as mgcv::gam)
-## In this case that will most likely be a quadrature point representation
-## cases include an age, sex, geo-coordinate (x,y), or possibly higher order coordinates, (x,y,t, w) for extra w
-## These should all be based on vctrs and preserve the relevant attributes needed for model setup
-
-
-## currently hacky implementation that should be improved
-## also doesn't seem to be working anyways
-## the goal of these is to get mgcv to work in a friendly way
-## min.covariate_placeholder <- function(pl, ...) {min(extract_coords(pl)$x, ...)}
-## max.covariate_placeholder <- function(pl, ...) {max(extract_coords(pl)$x, ...)}
-
+#' covariate placeholders should carry the relevant information regarding
+#' the appropriate single level entity  information needed in model fitting (such as mgcv::gam)
+#'  cases include an age, sex, geo-coordinate (x,y), or possibly higher order coordinates, (x,y,t, w) for extra w
+#' @export
 placeholder_value <- function(value) {
   structure(value, class = c('placeholder_value', 'numeric'))
 }
@@ -18,6 +9,14 @@ print.placeholder_value <- function(value) {
   cat(str_glue('(({value}))\n\n'))
 }
 
+
+
+
+## the goal of these is to get mgcv to work in a friendly way
+## ' min.covariate_placeholder <- function(pl, ...) {min(extract_coords(pl)$x, ...)}
+## ' max.covariate_placeholder <- function(pl, ...) {max(extract_coords(pl)$x, ...)}
+
+#'  @export
 covariate_placeholder <- function(data, coords) {
   structure(rep(placeholder_value(1), nrow(coords)),
             class = c('covariate_placeholder', 'numeric'),
@@ -25,54 +24,47 @@ covariate_placeholder <- function(data, coords) {
             data = data)
 }
 
-
 print.covariate_placeholder <- function(object){
   cat('A Covariate Placeholder\n')
 }
+
 `[.covariate_placeholder` <- function(object, ...){
   covariate_placeholder(extract_data(object), extract_coords(object)[...,])
 }
 
-
+#' @export
 extract_data <- function(object) {
   attr(object, 'data')
 }
 
+#' @export
 extract_coords <- function(object) {
   attr(object, 'coords')
 }
 
+#' @export
 remap <- function(placeholder, new_coords) {
   covariate_placeholder(extract_data(placeholder), new_coords)
 }
 
 
-## library(rlang)
-## library(vctrs)
-## library(spatstat.core)
-## source('coord.R')
-## source('covariate_types.R')
+#' Raster Type Covariates
 
-## Rcov currently uses im objects as the internal raster representation
+#'  Rcov handles data passed in raster formats.
+#' Currently, only 'im' type objects are handled
+#' Rcov does minimal handling of the raster objects, its primary goal is for metadata management and allowing natural manipulation of raster valued covariates
 
-## Rcov handles data passed in raster formats.
-## initially, only 'im' type objects are handled
-## Rcov does minimal handling of the raster objects,
-## each raster object is assigned a personal interpolator function that determines how interpolation
-## will be handled
-
-## interpolator options include 'bin' which treats the raster as a piecewise constant surface given by the raster values,
-## and 'bilin' which implements a bilinear interpolation based on assigning the weights of the pixels to their upper left coordinate corners
-## alternatively, with the argument centroid = TRUE bilinear interpolation will be computed on the basis of centroids.
-## depending on how data is passed in, Rcov requires different types of arguments to correctly harmonize the data with other covariate representations
-
-## Unlike some other covariate types, Rcov can only handle covariates of the same class at any given time
-
-
+#' @param interpolator
+#' options include 'bin' which treats the raster as a piecewise constant surface given by the raster values,
+#' and 'bilin' which implements a bilinear interpolation based on assigning the weights of the pixels to their upper left coordinate corners
+#' alternatively, with the argument centroid = TRUE bilinear interpolation will be computed on the basis of centroids.
+##depending on how data is passed in, Rcov requires different types of arguments to correctly harmonize the data with other covariate representations
+#' @export
 Rcov <- function(..., interpolator = c('bilin', 'bin', 'spatstat')) {
-  rasters <- list2(...)
+  rasters <- rlang::list2(...)
   interpolator <- match.arg(interpolator, interpolator)
   object_types <- length(unique(lapply(rasters, class)))
+  
   if (object_types != 1L) stop('Rcov requires all arguments be of the same type.\n Try using Rcov multiple times for each type of argument.')
 
   rasters <- lapply(rasters, convert_raster)
@@ -82,6 +74,7 @@ Rcov <- function(..., interpolator = c('bilin', 'bin', 'spatstat')) {
            class = c('Rcov', 'spatial_covariate'))
 }
 
+#' @export
 evaluate.Rcov <- function(object, locations, ...){
   stopifnot(is_coord(locations))
 
@@ -97,23 +90,27 @@ evaluate.Rcov <- function(object, locations, ...){
   do.call(c, lapply(rasters, interpolator))
 }
 
+#' @export
 format.Rcov <- function(r, ...){
   rep('Raster Object', vec_size(r))
 }
 
+#' @export
 vec_ptype_abbr.Rcov <- function(r, ...){
   'Rcov'
 }
 
-
+#' @export
 convert_raster <- function(object, ...){
   UseMethod('convert_raster')
 }
 
+#' @export
 convert_raster.im <- function(object, ...){
   return(object)
 }
 
+#' @export
 convert_raster.default <- function(object, ...){
   cl <- class(object)[[1]]
   message <- paste0('Objects of type ', cl, ' not currently supported.')
@@ -124,17 +121,7 @@ convert_raster.default <- function(object, ...){
 
 
 
-## covariate representations should have methods that make them easily coercible for representation in modeling
-## specifically, there should be a method for evaluating the covariate representation at the points of a quadrature scheme
-
-
-
-
-
 #' @param object
-#'
-#' @param ...
-#'
 #' @export
 evaluate <- function(object, ...){
  UseMethod('evaluate')
@@ -158,11 +145,8 @@ evaluate.spatial_covariate <- function(object, ...){
 ## @param ... <[`dynamic-dots`][rlang::dyn-dots]> What these dots do.
 
 
-## conv_prepare is a utility function used for preparing convolutional representations.
-## it is used for both Lcov and Pcov
-## Lcov and Pcov are essentially identical in representation and share most of the same code, but they are sufficiently
-## different in interpretation and use that they are divided into completely seperate classes
-#' Title
+#
+#' Preparation of Convolutional Covariate Representations
 #'
 #' @param object
 #' @param W
@@ -220,22 +204,21 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
 
 
 
-## Pcov
+#' Pcov
 
 
-## a number of vctrs methods need to still be added for Pcovs, such as restore methods etc
+#' Pcov is meant for point process valued data,
+#' an object of type 'ppp' or sf POINT objects can be handled as data input
 
-## Pcov is meant for point process valued data,
-## an object of type 'ppp' or sf POINT objects can be handled as data input
-
-## Pcov can be used to process multiple covariates at the same time, each covariate will be given the name of the argument if provided,
-## or otherwise will simply be assigned the name of the symbol passed in
-## Pcov returns a representation of the point process containing the necessary components for setting up a convolutional basis representation.
-## The return value is a dummy vector of length 1 containing only placeholder numeric data (this may be used later to store genuinely useful information).
-## The attributes contain angle orientation and distance matrices for setup of the convolutional basis. It also contains the precomputed fft of the
-## pixellated version of the process
-## additional attributes include the observation window of the process and the dimensions of the process
-
+#' Pcov can be used to process multiple covariates at the same time, each covariate will be given the name of the argument if provided,
+#' or otherwise will simply be assigned the name of the symbol passed in
+#' Pcov returns a representation of the point process containing the necessary components for setting up a convolutional basis representation.
+#' The return value is a dummy vector of length 1 containing only placeholder numeric data (this may be used later to store genuinely useful information).
+#' The attributes contain angle orientation and distance matrices for setup of the convolutional basis. It also contains the precomputed fft of the
+#' pixellated version of the process
+#' additional attributes include the observation window of the process and the dimensions of the process
+#' a number of vctrs methods need to still be added for Pcovs, such as restore methods etc
+#' @export
 
 ## W and dimyx should be moved into the attributes of the vector
 ## likewise distance and angle information should be shared between all covariates
@@ -556,85 +539,3 @@ Lcov_prepare <- function(object, W, dimyx, fractional){
 Lcov_prepare.linnet <- function(object, W, dimyx, fractional){
   conv_prepare(object, W, dimyx, fractional, normalize = FALSE)
 }
-
-
-
-
-
-
-## Rcov
-
-## library(rlang)
-## library(vctrs)
-## library(spatstat.core)
-## source('coord.R')
-## source('covariate_types.R')
-
-## Rcov currently uses im objects as the internal raster representation
-
-## Rcov handles data passed in raster formats.
-## initially, only 'im' type objects are handled
-## Rcov does minimal handling of the raster objects,
-## each raster object is assigned a personal interpolator function that determines how interpolation
-## will be handled
-
-## interpolator options include 'bin' which treats the raster as a piecewise constant surface given by the raster values,
-## and 'bilin' which implements a bilinear interpolation based on assigning the weights of the pixels to their upper left coordinate corners
-## alternatively, with the argument centroid = TRUE bilinear interpolation will be computed on the basis of centroids.
-## depending on how data is passed in, Rcov requires different types of arguments to correctly harmonize the data with other covariate representations
-
-## Unlike some other covariate types, Rcov can only handle covariates of the same class at any given time
-
-
-Rcov <- function(..., interpolator = c('bilin', 'bin', 'spatstat')) {
-  rasters <- list2(...)
-  interpolator <- match.arg(interpolator, interpolator)
-  object_types <- length(unique(lapply(rasters, class)))
-  if (object_types != 1L) stop('Rcov requires all arguments be of the same type.\n Try using Rcov multiple times for each type of argument.')
-
-  rasters <- lapply(rasters, convert_raster)
-
-  new_rcrd(list(rasters = rasters),
-           interpolator = interpolator,
-           class = c('Rcov', 'spatial_covariate'))
-}
-
-evaluate.Rcov <- function(object, locations, ...){
-  stopifnot(is_coord(locations))
-
-  x <- coordx(locations)
-  y <- coordy(locations)
-
-  rasters <- field(object, 'rasters')
-  interpolator <- switch(attr(object, 'interpolator'),
-                         'bilin' = function(r) interp.im(r, x,y, bilinear = TRUE),
-                         'bin' = r[x,y],
-                         'spatstat' = function(r) interp.im(r, x,y, bilinear = FALSE))
-
-  do.call(c, lapply(rasters, interpolator))
-}
-
-format.Rcov <- function(r, ...){
-  rep('Raster Object', vec_size(r))
-}
-
-vec_ptype_abbr.Rcov <- function(r, ...){
-  'Rcov'
-}
-
-
-convert_raster <- function(object, ...){
-  UseMethod('convert_raster')
-}
-
-convert_raster.im <- function(object, ...){
-  return(object)
-}
-
-convert_raster.default <- function(object, ...){
-  cl <- class(object)[[1]]
-  message <- paste0('Objects of type ', cl, ' not currently supported.')
-  stop(message)
-}
-
-
