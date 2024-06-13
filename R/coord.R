@@ -1,3 +1,6 @@
+if(interactive()){
+    library(vctrs)
+}
 
 #' 2d coordinates object
 #'
@@ -66,6 +69,22 @@ coordy <- function(ob){
     field(ob, 'y')
 }
 
+Norm <- function(ob, ...) {
+    UseMethod(ob, ...)
+}
+
+Norm2 <- function(ob, ...) {
+    UseMethod(ob, ...)
+}
+
+Norm.coord <- function(ob) {
+    sqrt(Norm2(ob))
+}
+
+
+Norm2.coord <- function(ob) {
+    coordx(ob)^2 + coordy(ob)^2
+}
 
 ## as_coord.sf
 
