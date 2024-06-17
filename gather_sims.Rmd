@@ -292,7 +292,7 @@ mutate(dat, py = py, px = px) |>
 
 
 ## scritp-to-vignette
-
+```{r}
 library(tidyverse)
 library(rmarkdown)
 library(knitr)
@@ -658,8 +658,9 @@ monte <- function(){
 }
 
 
+```
 
-
+```{r}
 ## let's try setting the poisson rate parameter to log(length) of the string, then I bet we can show with probability 1 that every sentence of length 1 will be represented in the output of this process in polynomial time.
 
 
@@ -759,7 +760,7 @@ XX <- PredictMat(smooth_internal, data.frame(distances = seq(from = 0, to = 3, l
 
 plot(XX[,2:10] %*% coef(fit))
 
-
+```
 
 
 
@@ -792,7 +793,6 @@ estimand <- function() {}
 distribution <- function(){}
 
 
-## simulation.Rmd
 
 ---
 output: html_document
@@ -1683,7 +1683,7 @@ cohorts %>% mutate(initial_age_groups = rep(initial_age_groups, length(years))) 
 CMR Code
 
 
-
+```{r}
 library(tidyverse)
 
 set.seed(11)
@@ -1747,14 +1747,11 @@ demo_table <- tibble(
         hire_year = sample(18:27, size = n, replace = TRUE) + birth_year,
         retire_year = sample(64:68, size = n, replace = TRUE),
         retire_month = sample(1:12, size = n, replace = TRUE))
+   ``` 
     
-    
-
-## race
-
-## sex
 
 
+```{r}
 library(tidyverse)
 library(popEpi)
 library(lubridate)
@@ -2482,10 +2479,10 @@ plot_age_stratified_ribbon2 <- function(sims) {
          geom_line(aes(group = name, color = measure_type)) +
          ylim(c(0,3)) + theme_bw()
 }
+```
 
 
-estimate.R
-
+```{r}
 library(tidyverse)
 library(janitor)
 library(readxl)
@@ -2744,3 +2741,4 @@ emigrate_first <- function(starting_cohort) {
 }
 
 
+```
