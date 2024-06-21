@@ -1,12 +1,6 @@
----
-title: Reporting of Results for Dissertation
----
 
-## basic AIPW 
-```{r, include = FALSE}
-knitr::opts_chunk$set(echo = FALSE)
-```
 
+* Basic AIPW
 ```{r}
 library(spatstat)
 
@@ -60,7 +54,7 @@ y2 <- integral(mu2) + sum((1-tt) * Y / (1-propensity_score)) - integral((1-tt) *
 ```
 
 
-
+* Compositional Data
 ```{r}
 ## basic composition
 
@@ -244,14 +238,7 @@ rp[!is.nan(r)] <- pred.rspde$mean
 
 
 
-```{r}
-
-```
-
-
-
-True DGP Illustration
-
+* True DGP Illustration
 ```{r}
 library(tidyverse)
 library(splines)
@@ -291,7 +278,7 @@ mutate(dat, py = py, px = px) |>
 
 
 
-## scritp-to-vignette
+*## scritp-to-vignette block
 ```{r}
 library(tidyverse)
 library(rmarkdown)
@@ -659,7 +646,7 @@ monte <- function(){
 
 
 ```
-
+* block
 ```{r}
 ## let's try setting the poisson rate parameter to log(length) of the string, then I bet we can show with probability 1 that every sentence of length 1 will be represented in the output of this process in polynomial time.
 
@@ -796,7 +783,7 @@ distribution <- function(){}
 
 ---
 output: html_document
----
+*--- block
 ```{r, include = FALSE}
 library(RandomFields)
 library(tidyverse)
@@ -810,7 +797,7 @@ library(disslib)
 ## BASIC DATA PREP ##
 #####################
 
-Sim 1
+*Sim 1 block
 ```{r}
 ## for all simulations we will use the basic map of allegheny county
 allegheny <- read_rds('simulation_utilities/allegheny_region_tracts.rds') |>
@@ -855,7 +842,7 @@ covar <- as.im.function(covarfun, window)
 ```
 
 Sim 1
-
+* Sim1
 ```{r, sim1}
 #######################
 ## BINARY TREATMENTS ##
@@ -878,7 +865,7 @@ plot(treatment)
 ```
 
 Sim 2
-
+* Sim2
 ```{r, sim2}
 ## simulation 2
 ## pointwise binary exposure, including covariates, but not confounding
@@ -897,7 +884,7 @@ ppm(pp ~ treatment2 + covar)
 ```
 
 Sim 3
-
+* Sim3
 ```{r, sim3}
 ## simulation3
 ## binary random field exposure
@@ -915,7 +902,7 @@ fit <- ppm(pp ~ treatment3 + covar, use.gam = TRUE)
 fit <- ppm(pp ~ treatment3 + covar + s(x,y, bs = 'gp', k = 40),  use.gam = TRUE)
 ```
 
-Sim 4
+*Sim 4 block
 ```{r}
 ## simulation 4, binary exposure with lower degree of spatial autocorrelation
 treatment4 <- as.im(as.matrix(RFsimulate(RMmatern(var = 2, scale = 0.05, nu = 1.3), gridx, gridx)) > 0, window)
@@ -941,7 +928,7 @@ fit <- gam(.mpl.Y ~ treatment5 + covar + te(x,y, bs = 'gp', k = 10), weights = .
 ```
 ## simulation structure
 
-Sim 5
+*Sim 5 block
 ```{r}
 ## next round of simulations
 ## consider scenarios where covariates are themselves spatially autocorrelated, so there is residual spatially determined confounding.
@@ -959,7 +946,7 @@ fit <- ppm(pp ~ treatment3 +  s(x,y, bs = 'gp', k = 40),  use.gam = TRUE)
 ```
 
 Sim 6
-
+* Sim4
 ```{r}
 ## explicitly confounded treatment on the basis of spatially autocorrelated covariate
 treatment6 <- as.im(matrix(rbinom(128^2, 1, plogis(c(as.matrix(spatial_covar)) * 0.3 - 1)), 128, 128), window)
@@ -977,7 +964,7 @@ fit <- ppm(pp ~ treatment6 +  s(x,y, bs = 'gp', k = 40),  use.gam = TRUE)
 ```
 
 Sim 7
-
+* Sim5
 ```{r}
 ## treatment 7 is a spatially autocorrelated treatment resulting counfounded by a spatially autocorrelated covariate,
 ## but that is realized as a direct sum of the covariate and a secondary random process.
@@ -1002,7 +989,7 @@ fit <- ppm(pp ~ treatment7 +  s(x,y, bs = 'gp', k = 40),  use.gam = TRUE)
 ```
 
 Sim 8
-
+* Sim6
 ```{r}
 
 ## treatment8
@@ -1031,7 +1018,7 @@ fit <- ppm(pp ~ treatment8 +  s(x,y, bs = 'gp', k = 40),  use.gam = TRUE)
 ###########################
 ## CONTINUOUS TREATMENTS ##
 ###########################
-
+* Sim7
 ```{r}
 ## treatment is spatial covar plus a residual surface
 
@@ -1076,7 +1063,7 @@ plot(broken_covar)
 
 ```
 
-
+* Sim8
 ```{r}
 
 
@@ -1158,7 +1145,7 @@ make_summary_plot(fit2, treated_intens_surface, mydd2)
 
 Emigration Sim--collab with Dr. Marsh
 
-
+* Sim9
 ```{r load_libraries, include = FALSE}
 library(tidyverse)
 library(janitor)
@@ -1175,7 +1162,7 @@ Rates were taken from the white male rates
 file for England from the chloroprene study. All age groups were used from the last time period available
 (1996-2000). These rates were taken to be constant over time for all
 time periods, and were applied for both men and women in the cohort. 
-
+* Sim10
 ```{r read_death_rates, include = FALSE, cache = TRUE}
 start <- c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110)
 end   <- c(18, 28, 38, 48, 58, 68, 78, 88, 98, 108, 118)
@@ -1214,7 +1201,7 @@ Below is the rates table used here. The the variable "lb" is the age lower bound
 the age upper bound. These represent lower and upper (inclusive)
     bounds for the various age groups.
 ```
-
+* Cohort Replication
 ```{r, echo = FALSE, include = params$verbose_output}
 datatable(rates)
 ```
@@ -1225,7 +1212,7 @@ immediately available, it was necessary to recreate a simulated cohort
 from the available tables in the first chloroprene paper. Constraints
 that were useful for recreating sex and age data were entered into the
 program and used to constrain the cohort simulation.
-
+* todo
 ```{r import_constraints_and_tables, include = FALSE}
 # file where chloroprene tables as well as immigration table were manually entered
 source('table2.R')
@@ -1255,7 +1242,7 @@ hired after the age of 60, and that no one was initially employed more
 than 35 years ago. The
 cohort was further simplified in order to reduce the complexity of the
 simulation by assuming everyone was male. 
-
+* Cohort Microsim
 ```{r cohort_microsim, include = FALSE, cache = TRUE}
 ## the truncate replicate sample algorithm
 trs <- function(table) {
@@ -1378,7 +1365,6 @@ pop_data_extrap <- bind_rows(
 pop_data <- pop_data %>% bind_rows(pop_data_extrap)
 
 ```
-
 ```{r, echo = FALSE, include = params$verbose_output}
 datatable(pop_data)
 ```
@@ -1398,7 +1384,6 @@ further model selection carried out.
 
 The resulting emigration count dataset was merged with population by
 year and by age group in order to compute later required rates.
-
 ```{r immigration_data, include = FALSE, cache = TRUE}
 # age group emigration numbers
 age_group <- age_group %>%
@@ -1459,7 +1444,6 @@ emigration_normal <- filter(emigration, !(age_group %in% c('Less than 18 years',
 emigration <- bind_rows(emigration_extreme, emigration_normal)
 
 ```
-
 ```{r, echo = FALSE, include = params$verbose_output}
 datatable(emigration %>% select(lb, ub, year, n_emigrate = n_age, n_pop) %>% arrange(lb))
 ```
@@ -1487,7 +1471,6 @@ utilized for determining relevant age groups, although
 rates were also determined on the basis of year. Emigration rates for
 the selected age ranges were then
 directly computed based on emigration and population counts. 
-
 ```{r simulation_functions, include = FALSE, cache = TRUE}
 age <- function(data) {
     data %>% mutate(age_lb = age_lb + 1,
@@ -1520,8 +1503,8 @@ emigrate <- function(data, year) {
 
 ```
 
-## Results
 
+Results
 ```{r run_simulation, include = FALSE}
 
 starting_cohort <- cohort
@@ -1606,7 +1589,7 @@ starting_n <- sum(starting_cohort$n)
 percent_of_cohort <- function(col) map_chr(col, ~glue::glue(round(100 * . / starting_n, digits= 2), '%'))
 ```
 
-### Results from Death First Simulation
+*### Results from Death First Simulation block
 ```{r, echo = FALSE}
 die_first_results %>% gather(status, value) %>%
     group_by(status) %>%
@@ -1620,7 +1603,7 @@ die_first_results %>% gather(status, value) %>%
 
 ```
 
-### Results from Emigration First Simulation
+*### Results from Emigration First Simulation block
 ```{r, echo = FALSE}
 emigrate_first_results %>% gather(status, value) %>%
     group_by(status) %>%
@@ -1645,7 +1628,7 @@ accumulate and then die at the same rates as the general cohort.
 ```
 
 
-### Sample persons-table
+*### Sample persons-table block
 ```{r , cache = TRUE, echo = FALSE, include = params$verbose_output}
 years <- 2001:2016
 die_first_s <- function(starting_cohort) {
