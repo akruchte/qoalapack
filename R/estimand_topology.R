@@ -1,5 +1,6 @@
 
 ## input: one-of locs (set of locations),
+#' @export
 gen_cover <- function(locs, eps) {
     lc <- class(locs)
 

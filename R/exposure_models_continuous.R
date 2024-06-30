@@ -1,4 +1,3 @@
-
 ## example
 if(FALSE){
     w <- owin()
@@ -16,12 +15,14 @@ if(FALSE){
 ## numerator model is used for stabilization weights
 ## it takes in an exposure model as an argument and fits
 ## the model required for propensity score stabilization
+#' @export
 numerator_model <- function(exposure_model){
 
 }
 ## exposure models need to receive data in the form of a marked process, but where the marks are considered the outcomes rather than the locations
 ## The basic quadrature scheme tools can then be used, but used for the sake of point evaluations of the covariates at the site observations
 ## exposure should be represented as a marked process, the marks are assumed to be the response values for modeling.
+#' @export
 exposure_model <- function(formula, data, family, method = 'gam', ..., numerator_model =TRUE){ 
     exposure <- data[[as.character(formula[[2]])]]
     
@@ -42,6 +43,8 @@ exposure_model <- function(formula, data, family, method = 'gam', ..., numerator
     mod_fit
 }
 
+
+#' @export
 select_engine <- function(method) {
     switch(method,
            gam = gam,
@@ -50,6 +53,8 @@ select_engine <- function(method) {
 
 
 ## evaluate each component of a spatial data frame in the required ways to construct the necessary quadrature scheme
+
+#' @export
 evaluate_quadrature <- function(data, at, ..., formula) {
     map_dfc(data, function(ob) evaluate(ob, locations = at))
 }
@@ -72,6 +77,8 @@ if(RUN){
 ## allow numerator model to be prefit
 ## if not prefit, use the type of numerator model provided
 ## if not provided at all, use a sane default
+
+#' @export
 propensity_fun <- function(propensity_model, prediction_locations, numerator_model) {
 
     outcome_term <- as.character(propensity_model$formula[[2]])

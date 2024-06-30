@@ -1,8 +1,7 @@
-library(tidyverse)
-library(rlang)
-library(vctrs)
-
+#' @export
 dens <- function(x) exp(-(x^2))
+
+#' @export
 metropolis <- function(dens, niter = 100){
 
     past <- rnorm(1)

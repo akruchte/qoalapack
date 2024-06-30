@@ -20,7 +20,7 @@
 
 
 
-
+#' @export
 swarm_initialize <- function(){
 }
 
@@ -39,6 +39,8 @@ swarm_initialize <- function(){
 ## mixed semantics
 ## a <- known-value
 ## b <- (continuation-expression)
+
+#' @export
 warm_start <- function(fitting_context) {
     ## start the fiting process somehow
     ## initialize the parameter recording structure

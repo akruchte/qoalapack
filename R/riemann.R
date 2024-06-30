@@ -1,5 +1,4 @@
-library(tidyverse)
-
+#' @export
 base_bump <- function(
                  a=1, b=1, c=1,
                  d = 1, p = 2,
@@ -19,8 +18,13 @@ bump_location_scale <-function(base_bump, location, scale) {
 
 ## take a boundary region and deform to a circular space
 ## find be easiest to do this via simplex structure, open simplex structure to euclidean two dimensional space and then encode as a complex value
+#' @export
 boundary_to_circle <- function(){}
+
+#' @export
 circle_to_segment <- function(){}
+
+#' @export
 boundary <- function(sf_rectifiable_or_spatstat_window, win = sf_retifiable_or_spatstat_window)
 {
     opening <- window_internal

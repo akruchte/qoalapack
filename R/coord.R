@@ -19,19 +19,7 @@ coord <- function(x = double(), y = double()){
 }
 
 
-#' Title
-#'
-#' @param x 
-#' @param ... 
-#'
-#' @return
 #' @export
-#'
-#' @examples
-vec_ptype_abbr.coord <- function(x, ...){
-    'coord'
-}
-
 format.coord <- function(ob, ...){
     x <- signif(field(ob, 'x'), 2)
     y <- signif(field(ob, 'y'), 2)
@@ -52,6 +40,7 @@ as_coord <- function(ob, ...){
     UseMethod('as_coord')
 }
 
+#' @export
 as_coord.default <- function(ob, ...){
     cl <- class(ob)[[1]]
     vec_cast(ob, coord())
@@ -69,19 +58,22 @@ coordy <- function(ob){
     field(ob, 'y')
 }
 
+#' @export
 Norm <- function(ob, ...) {
     UseMethod(ob, ...)
 }
 
+#' @export
 Norm2 <- function(ob, ...) {
     UseMethod(ob, ...)
 }
 
+#' @export
 Norm.coord <- function(ob) {
     sqrt(Norm2(ob))
 }
 
-
+#' @export
 Norm2.coord <- function(ob) {
     coordx(ob)^2 + coordy(ob)^2
 }

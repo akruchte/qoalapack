@@ -1,5 +1,5 @@
-source('covariate_types.R')
-source('utilities.R')
+## source('covariate_types.R')
+## source('utilities.R')
 ## examples for documentation
 RUN <- FALSE
 if(RUN) {
@@ -7,23 +7,11 @@ if(RUN) {
     Q <- quadscheme(dat)
 }
 
-
-library(mgcv)
-library(pracma)
-library(abind)
-
-
-library(spatstat)
-library(dplyr)
-library(purrr)
-library(stringr)
-library(glue)
-library(rlang)
-
-
 ## crude temporary implementation of outcome model
 ## takes in a fitted model and provides a simple wrapper for calculating
 ## quantities needed for estimation
+
+#' @export
 outcome_model <- function(model, prediction_locations) {
     list(model = model,
           mufun = outcome_fun(model, prediction_locations))
@@ -32,6 +20,8 @@ outcome_model <- function(model, prediction_locations) {
 ## returns a function f(i) for treatment A indexed by i.
 ## f evaluates the predicted intensity at each of the originally specified locations when assigned a treatment value of A
 ## expects that the model have treatment provided as the first term
+
+#' @export
 outcome_fun <- function(omodel, prediction_locations){
     if(missing(prediction_locations)) stop('Prediction dataset required')
     linkinv <- exp
@@ -48,6 +38,7 @@ outcome_fun <- function(omodel, prediction_locations){
     ## mufun is a function that predicts the potential outcome, at covariate values corresponding to those at each and every of the provided prediction locations
     ## For each prediction location it returns the predicted value corresponding to the ith level of the observed treatments if the argument i is provide.
     ## if a is provided, it predicts on the basis of the value of a
+    #' @export
     mufun <- function(i, a) {
         if(missing(i) & missing(a)){
             stop('Conditional mean prediction requires either an index referring to an observed treatment (i), or a specific value of treatment (a)')
@@ -71,7 +62,7 @@ outcome_fun <- function(omodel, prediction_locations){
 ## formula extractor
 ## deconstruct formula and determine relevant terms, etc
 
-
+#' @export
 ordinal_model <- function(){
     gam(outcome ~ s(x,y), family = ocat(R = n))
 }
@@ -90,6 +81,7 @@ ordinal_model <- function(){
 ## optimizer_control is used for selecting the optimization parameters, and method of optimization
 ## if method = 'gam' mgcv is used directly for estimation using the mgcv native defaults. Alternative methods may be provided
 ## down the line if distributed optimization is required
+#' @export
 outcome_control <- function(quadrature_control,
                             optimizer_control,
                             gam_control,
@@ -98,6 +90,7 @@ outcome_control <- function(quadrature_control,
 
 }
 
+#' @export
 ppmod <- function(Y, Q, ppcov, covariates = NULL, dimyx = c(128, 128), k = NULL, bs = 'tp') {
     stopifnot(!is.null(names(ppcov)))
     stopifnot(is.list(ppcov))
@@ -128,6 +121,8 @@ ppmod <- function(Y, Q, ppcov, covariates = NULL, dimyx = c(128, 128), k = NULL,
 
 }
 
+
+#' @export
 print.ppmod <- function(object) {
     cat('A Point Process Model:\n\n')
     cat(glue('Outcome process with {npoints(object$Y)} points.\n\n'))
@@ -137,6 +132,7 @@ print.ppmod <- function(object) {
 
 }
 
+#' @export
 print.counterfactual <- function(object){
     cat('Counterfactual Modified Point Process: \n\n')
     print.ppmod(object)
@@ -145,6 +141,8 @@ print.counterfactual <- function(object){
     cat(glue('Counterfactually modified covariates: {object$counterfactual_covs}.\n\n'))
 }
 
+
+#' @export
 predict.ppmod <- function(object, newdata, ... ) {
 
     if(missing(newdata)){
@@ -160,7 +158,7 @@ predict.ppmod <- function(object, newdata, ... ) {
     predict.gam(object, newdata = newdata, ...)
 }
 
-
+#' @export
 prep_outcome <- function(Y, Q){
 bind_cols(
     bind_rows(
@@ -175,6 +173,8 @@ bind_cols(
 ## prepare data
 ## mpl prepare is now obsolete
 ## should be replaced with data frame based setup functions
+
+#' @export
 mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 128))
 {
     prepped_data <- bind_cols(
@@ -226,7 +226,7 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 }
 
 
-
+#' @export
 update_exposure <- function(model, new_exposure) {
 
     newdata <- model$gam_data
@@ -277,7 +277,7 @@ update_exposure <- function(model, new_exposure) {
     model
 }
 
-
+#' @export
 construct_internal_basis <- function(object, conv_data, knots){
 
     basis_term <- 'bs'
@@ -300,6 +300,7 @@ construct_internal_basis <- function(object, conv_data, knots){
 
 }
 
+#' @export
 smooth.construct.area.smooth.spec <- function(object, data, knots){
     areas <- object$xt$areas
     npoints <- object$xt$npoints
@@ -327,6 +328,7 @@ smooth.construct.area.smooth.spec <- function(object, data, knots){
 }
 
 ## required mgcv function
+#' @export
 smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     conv_data <- extract_data(data[[object$term]])
     coords <- extract_coords(data[[object$term]])
@@ -410,6 +412,8 @@ if(experiment <- FALSE){
 
 }
 
+
+#' @export
 smooth.construct.aconv.smooth.spec <- function(object, data, knots) {
     conv_data <- extract_data(data[[object$term]])
     coords <- extract_coords(data[[object$term]])
@@ -445,6 +449,8 @@ smooth.construct.aconv.smooth.spec <- function(object, data, knots) {
 
 
 ## required mgcv function
+
+#' @export
 Predict.matrix.AConvspline.smooth <- function(object, data) {
 
     ## add a secondary check, if data are passed directly as coordinates just predict directly at those points
@@ -458,7 +464,7 @@ Predict.matrix.AConvspline.smooth <- function(object, data) {
     do.call(cbind, interped)
 }
 
-
+#' @export
 convolve_basis <- function(basis, for_conv, dims, window, coords){
     basis <- fft(basis)
     dim(basis) <- dims * 2

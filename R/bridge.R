@@ -1,4 +1,4 @@
-library(Rcpp)
-library(here)
+## library(Rcpp)
+## library(here)
 
-Rcpp::sourceCpp(file = here("src/test.cpp"))
+## Rcpp::sourceCpp(file = here("src/test.cpp"))
