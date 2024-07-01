@@ -6,3 +6,4 @@
 .quarto
 R/.\#varieties.R
 .rds
+*.Rd
