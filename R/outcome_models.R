@@ -177,6 +177,7 @@ bind_cols(
 ## should be replaced with data frame based setup functions
 mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 128))
 {
+    if (!missing(Q)){
     prepped_data <- bind_cols(
         bind_rows(
             bind_cols(coords(Q$data), outcome = 1),
@@ -184,6 +185,7 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
             ),
         w = Q$w) |>
         mutate(outcome = outcome / w)
+    }
 
 
     prepped_pp_exposures <- vector(mode = 'list', length(ppcov))
@@ -255,8 +257,10 @@ update_exposure <- function(model, new_exposure) {
             cov <- object$term
             conv_data <- extract_data(newdata[[cov]])
 
-
-            new_basis <- Predict.matrix(object$internal_basis, list(distances = c(field(conv_data, 'pcov')[[1]]$distances)))
+            basis <- list( c(field(conv_data, 'pcov')[[1]]$distances))
+            names(basis) <- object$term
+        
+            new_basis <- Predict.matrix(object$internal_basis, basis)
             object$interpolation_basis <- apply(
                 new_basis, 2,
                 function(basis) convolve_basis(basis,
@@ -279,14 +283,14 @@ update_exposure <- function(model, new_exposure) {
 
 
 construct_internal_basis <- function(object, conv_data, knots){
-
+    term <- object$term
     basis_term <- 'bs'
     if (length(class(object)) > 1) {
         basis_term <- str_extract(class(object)[[2]], '[a-zA-Z]+')
     }
 
     basis_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim)
-
+    basis_call$label <- paste0('conv(', term, ')')
 
     ## local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances)))
     local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances *2)))
@@ -445,7 +449,9 @@ smooth.construct.aconv.smooth.spec <- function(object, data, knots) {
 
 
 ## required mgcv function
-Predict.matrix.AConvspline.smooth <- function(object, data) {
+
+#' @export
+Predict.matrix.Convspline.smooth <- function(object, data) {
 
     ## add a secondary check, if data are passed directly as coordinates just predict directly at those points
     coords <- extract_coords(data[[object$term]])

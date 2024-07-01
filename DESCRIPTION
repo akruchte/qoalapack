@@ -13,6 +13,8 @@ Imports:
     dplyr,
     mgcv,
     pracma,
+    rlang,
+    rpart,
     spatstat.geom,
     spatstat.random,
     tidyr
