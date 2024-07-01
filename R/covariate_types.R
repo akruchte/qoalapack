@@ -225,7 +225,7 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
 ## W and dimyx should be moved into the attributes of the vector
 ## likewise distance and angle information should be shared between all covariates
 Pcov <- function(..., W , dimyx, fractional = FALSE ){
-  covars <- list2(...)
+  covars <- rlang::list2(...)
   prepped <- vector('list', length = length(covars))
   for (i in seq_along(covars)){
     covar <- covars[[i]]
@@ -524,7 +524,7 @@ format.Ecov <- function(ob, ...){
 
 #' @export
 Lcov <- function(..., W = NULL, dimyx = c(128, 128)){
-  covars <- list2(...)
+  covars <- rlang::list2(...)
 
   for (i in seq_along(covars)){
     covar <- covars[i]
