@@ -1,24 +1,17 @@
-source('covariate_types.R')
-source('utilities.R')
+## source('covariate_types.R')
+## source('utilities.R')
 ## examples for documentation
-RUN <- FALSE
-if(RUN) {
-    dat <- swedishpines
-    Q <- quadscheme(dat)
-}
 
 
-library(mgcv)
-library(pracma)
-library(abind)
+## library(mgcv)
+## library(pracma)
 
-
-library(spatstat)
-library(dplyr)
-library(purrr)
-library(stringr)
-library(glue)
-library(rlang)
+## library(spatstat)
+## library(dplyr)
+## library(purrr)
+## library(stringr)
+## library(glue)
+## library(rlang)
 
 
 ## crude temporary implementation of outcome model
@@ -193,12 +186,14 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 
     for(i in seq_along(ppcov)) {
         imm <- Pcov(ppcov[[i]], W = Y$window, dimyx = dimyx)[[1]]
-        prepped_pp_exposures[[i]] <- covariate_placeholder(imm, coords(Q))
+        res <- covariate_placeholder(imm, coords(Q))
+
+        prepped_pp_exposures[[i]] <- res
     }
 
     prepped_covariates <- vector(mode = 'list', length(ppcov))
     names(prepped_covariates) <- names(covariates)
-
+    
     for (i in seq_along(covariates)){
         covar <- covariates[[i]]
         if (is.im(covar)){
@@ -223,10 +218,9 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
         prepped_covariates
     )
 
-
+    
     gam_data
 }
-
 
 
 update_exposure <- function(model, new_exposure) {
@@ -284,7 +278,7 @@ update_exposure <- function(model, new_exposure) {
 
 construct_internal_basis <- function(object, conv_data, knots){
     term <- object$term
-    basis_term <- 'bs'
+    basis_term <- 'ps'
     if (length(class(object)) > 1) {
         basis_term <- str_extract(class(object)[[2]], '[a-zA-Z]+')
     }
@@ -293,16 +287,20 @@ construct_internal_basis <- function(object, conv_data, knots){
     basis_call$label <- paste0('conv(', term, ')')
 
     ## local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances)))
-    local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances *2)))
+## COME HERE
+
+    local_data <- list(distances = (unique(c(field(conv_data, 'pcov')[[1]]$distances  ))))
 
 
+
+ 
     basis <- smooth.construct(basis_call, data = local_data, knots = knots)
     basis$og_data <- local_data
     ## needs to be updated to use a more coherent placeholder covariate
     basis$X <- Predict.matrix(basis, data = list(distances = c(field(conv_data, 'pcov')[[1]]$distances)))
     basis
-
 }
+
 
 smooth.construct.area.smooth.spec <- function(object, data, knots){
     areas <- object$xt$areas
@@ -312,7 +310,7 @@ smooth.construct.area.smooth.spec <- function(object, data, knots){
                     function(area, id) {
                         st_sample(area, npoints) |>
                         st_coordinates() |>
-                        as_tibble() |>
+                         as_tibble() |>
                         mutate(id = id, area = as.numeric(st_area(area)), dxdy = area / npoints)
     }
     )
@@ -331,7 +329,9 @@ smooth.construct.area.smooth.spec <- function(object, data, knots){
 }
 
 ## required mgcv function
+
 smooth.construct.conv.smooth.spec <- function(object, data, knots) {
+
     conv_data <- extract_data(data[[object$term]])
     coords <- extract_coords(data[[object$term]])
 
@@ -360,6 +360,7 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     basis
 
 }
+
 
 
 

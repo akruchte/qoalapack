@@ -183,6 +183,7 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
                    ycoords - median(ycoords),
                    \(x,y) sqrt(x^2 + y^2))
 
+
     half_dists <- seq(from = 0, to = max(dists), length.out = ceiling(dim(dists)[[1]]/2))
 
     dists <- fft2shift(dists)
@@ -198,7 +199,8 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
          window = object$window,
          dims = dimyx,
          distances = dists,
-         angle = angle
+         angle = angle,
+         unique_dists = unique(dists)
          )
 }
 
