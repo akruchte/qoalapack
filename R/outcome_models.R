@@ -1,5 +1,5 @@
-source('covariate_types.R')
-source('utilities.R')
+## source('covariate_types.R')
+## source('utilities.R')
 ## examples for documentation
 RUN <- FALSE
 if(RUN) {
@@ -8,17 +8,17 @@ if(RUN) {
 }
 
 
-library(mgcv)
-library(pracma)
-library(abind)
+## library(mgcv)
+## library(pracma)
+## library(abind)
 
 
-library(spatstat)
-library(dplyr)
-library(purrr)
-library(stringr)
-library(glue)
-library(rlang)
+## library(spatstat)
+## library(dplyr)
+## library(purrr)
+## library(stringr)
+## library(glue)
+## library(rlang)
 
 
 ## crude temporary implementation of outcome model

@@ -2,10 +2,10 @@ library(spatstat)
 library(mgcv)
 library(tidyverse)
 library(rlang)
-source('outcome_models.R')
-source('exposure_models_continuous.R')
+## source('outcome_models.R')
+## source('exposure_models_continuous.R')
 
-RUN <- TRUE
+RUN <- FALSE
 
 
 if(RUN) {
@@ -67,9 +67,9 @@ ATE <- function(outcome_model, exposure_model, data, method = c('AIPW', 'TMLE', 
     if (method == 'AIPW'){
         data |> mutate(
                     mu1 <- predict(outcome_model, newdata = mutate(data, treatment = 1), type = 'response'),
-                    mu0 <- predict(outcome_model, newdata = mutate(data, treatment = 0), type = 'response'),
+                    mu0 <- predict(outcome_model, newdata = mutate(data, treatment = 0), type = 'response'))
         ## needs to be able to take new data
-                    pi <- predict(exposure_model, newdata =   type = 'response'))
+                    ## pi <- predict(exposure_model, newdata =   type = 'response'))
 
 
  
