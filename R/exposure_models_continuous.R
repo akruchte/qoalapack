@@ -1,18 +1,3 @@
-
-## example
-if(FALSE){
-    w <- owin()
-    obsp <- runifpoint(110)
-
-    treatment <-function(x,y) 2 * x + log(x) + x * y / 15 + 0.01 * x^2 + 0.3 * y + sin(y) + rnorm(length(x))
-    cobs <- coords(obsp)
-    treat <- treatment(cobs[,1], cobs[,2])
-
-    dd <- data.frame(treat = treat, x = cobs[,1], y = cobs[,2])
-
-    f <- gam(treat ~ s(x) + s(y), data = dd, family = gaussian())
-}
-
 ## numerator model is used for stabilization weights
 ## it takes in an exposure model as an argument and fits
 ## the model required for propensity score stabilization
@@ -41,6 +26,8 @@ exposure_model <- function(formula, data, family, method = 'gam', ..., numerator
 
     mod_fit
 }
+
+
 
 select_engine <- function(method) {
     switch(method,
