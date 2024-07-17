@@ -5,6 +5,7 @@ matern <- function(d, sig2, v, rho) {
              sig2 * 2 ^ (1 - v) / gamma(v) * (sqrt(2 * v) * d / rho)^v * besselK(sqrt(2 * v) * d / rho, v))
 }
 
+#' @export
 sim_matproc <- function() {
     x <- seq(from = -5, to = 5, length.out = 100)
     dist <- function(x, y) sqrt(x^2 + y^2)

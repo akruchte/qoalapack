@@ -34,13 +34,13 @@
 ##     em <- gam(treat ~ s(x,y), data = gride, family = binomial())
 
 ## }
-
+#' @export
 replace_values <- function(im, value) {
     im[] <- c(value)
     return(im)
 }
 
-
+#' @export
 ATE <- function(outcome_model, exposure_model, data, method = c('AIPW', 'TMLE', 'IPW', 'Entropy', 'Outcome', 'Energy')){
 
     ## TODO move propensity score logic to here 
@@ -78,12 +78,16 @@ ATE <- function(outcome_model, exposure_model, data, method = c('AIPW', 'TMLE', 
     }
 }
 
-
+#' @export
 ATT <- function(){
     
 }
+
+#' @export
 ATU <- function(){}
 
+
+#' @export
 DoseR <- function(outcome_model, exposure_model, response, prediction_data, treatment_variable, method = 'AIPW'){
     response <- pixellate(response, DivideByPixelArea = TRUE)
     if (method == 'AIPW'){
@@ -146,6 +150,8 @@ DoseR <- function(outcome_model, exposure_model, response, prediction_data, trea
     }
 }
 
+
+#' @export
 DoseR_continuous <- function(){
 
 }
