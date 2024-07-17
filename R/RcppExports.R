@@ -2,14 +2,10 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 newfun <- function(c) {
-    .Call(`_qoalapack_newfun`, c)
+    .Call('_qoalapack_newfun', PACKAGE = 'qoalapack', c)
 }
 
 test <- function(h) {
-    .Call(`_qoalapack_test`, h)
-}
-
-rcpp_hello_world <- function() {
-    .Call(`_qoalapack_rcpp_hello_world`)
+    .Call('_qoalapack_test', PACKAGE = 'qoalapack', h)
 }
 
