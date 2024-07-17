@@ -1,23 +1,14 @@
 Package: qoalapack
-Title: Spatial Statistics for Point Process Exposures
-Version: 0.0.0.9001
-Authors@R: 
-    person("Adam", "Kruchten", , "adk79@pitt.edu", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: GPL (>= 3)
-Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
+Type: Package
+Title: What the Package Does in One 'Title Case' Line
+Version: 1.0
+Date: 2024-07-17
+Author: Your Name
+Maintainer: Your Name <your@email.com>
+Description: One paragraph description of what the package does as one or more full sentences.
+License: GPL (>= 2)
+Imports: Rcpp (>= 1.0.12)
+LinkingTo: Rcpp
 RoxygenNote: 7.3.1
-Imports: 
-    dplyr,
-    mgcv,
-    pracma,
-    rlang,
-    rpart,
-    spatstat.geom,
-    spatstat.random,
-    tidyr
-Suggests: 
-    testthat (>= 3.0.0)
-Config/testthat/edition: 3
+Depends: 
+    mgcv

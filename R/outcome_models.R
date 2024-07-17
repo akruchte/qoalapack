@@ -3,6 +3,75 @@
 ## examples for documentation
 
 
+test_outcome_mod <- function() {
+    set.seed(0)
+    gen_covar <- function(...) spatstat.random::rpoispp(35)
+    Ys <- map(1:5, gen_covar)
+    Xs <- map(1:5, gen_covar)
+
+    points <- reduce(Ys, superimpose)
+
+    pcovs <- map(Xs, Pcov)
+
+    pc <- covariate_placeholder(pcovs, coords(points))
+
+    
+    
+}
+
+## eval_scheme and outcome must correspond!!!
+## this is not checked right now!!!
+#' @export
+mod_rep <- function(Pcovlist){
+        
+    prepped_pp_exposures <- vector(mode = 'list', length(ppcov))
+    names(prepped_pp_exposures) <- names(ppcov)
+
+    for(i in seq_along(ppcov)) {
+
+        ## W = Y$window,
+        imm <- Pcov(ppcov[[i]],  dimyx = dimyx)[[1]]
+        res <- covariate_placeholder(imm, coords(Q))
+
+        prepped_pp_exposures[[i]] <- res
+    }
+
+    prepped_covariates <- vector(mode = 'list', length(ppcov))
+    names(prepped_covariates) <- names(covariates)
+    
+    for (i in seq_along(covariates)){
+        covar <- covariates[[i]]
+        if (is.im(covar)){
+            ## new_covar <- interp.im(covar, x = prepped_data[,1], y = prepped_data[,2])
+            new_covar <- covar[list(x = prepped_data[,1], y = prepped_data[,2])]
+        }
+        else if (is.function(covar)) {
+            if (! identical(names(formals(covar)), c('x', 'y'))) stop('Functional covariates must have formal arguments x and y')
+            new_covar <- covar(prepped_data[,1], prepped_data[,2])
+        }
+
+        else {
+            stop('Covariates must be passed as either functions of x and y arguments or images')
+        }
+        prepped_covariates[[i]] <- new_covar
+
+    }
+
+    gam_data <- bind_cols(
+        prepped_data,
+        prepped_pp_exposures,
+        prepped_covariates
+    )
+
+    
+    gam_data
+}
+
+
+
+
+
+
 ## library(mgcv)
 ## library(pracma)
 
@@ -20,7 +89,7 @@
 #' @export
 outcome_model <- function(model, prediction_locations) {
     list(model = model,
-          mufun = outcome_fun(model, prediction_locations))
+         mufun = outcome_fun(model, prediction_locations))
 }
 
 ## returns a function f(i) for treatment A indexed by i.
@@ -154,7 +223,7 @@ predict.ppmod <- function(object, newdata, ... ) {
 
     for (covariate in object$ppcovs) {
         newdata[,covariate] <- remap(object$gam_data[,covariate],
-                                             new_coords = newdata[,c('x', 'y')])
+                                     new_coords = newdata[,c('x', 'y')])
     }
 
 
@@ -163,23 +232,19 @@ predict.ppmod <- function(object, newdata, ... ) {
 
 #' @export
 prep_outcome <- function(Y, Q){
-bind_cols(
-    bind_rows(
-        bind_cols(coords(Q$data), outcome = 1),
-        bind_cols(coords(Q$dummy), outcome = 0),
-        ),
-    w = Q$w) |>
+    bind_cols(
+        bind_rows(
+            bind_cols(coords(Q$data), outcome = 1),
+            bind_cols(coords(Q$dummy), outcome = 0),
+            ),
+        w = Q$w) |>
         mutate(outcome = outcome / w)
 }
 
 
-## prepare data
-## mpl prepare is now obsolete
-## should be replaced with data frame based setup functions
-#' @export
-mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 128))
-{
-    if (!missing(Q)){
+
+## given point process and quadscheme setup for point process models
+resp_value_prepare <- function(Y, Q) {
     prepped_data <- bind_cols(
         bind_rows(
             bind_cols(coords(Q$data), outcome = 1),
@@ -187,14 +252,28 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
             ),
         w = Q$w) |>
         mutate(outcome = outcome / w)
-    }
+
+    prepped_data
+}
 
 
+## prepare data
+## mpl prepare is now obsolete
+## should be replaced with data frame based setup functions
+## ppcov is a list of lists of point processes
+
+#' @export
+mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 128))
+{
+    prepped_data <- resp_value_prepare(Y, Q)
+    
     prepped_pp_exposures <- vector(mode = 'list', length(ppcov))
     names(prepped_pp_exposures) <- names(ppcov)
 
     for(i in seq_along(ppcov)) {
-        imm <- Pcov(ppcov[[i]], W = Y$window, dimyx = dimyx)[[1]]
+
+        ## W = Y$window,
+        imm <- Pcov(ppcov[[i]],  dimyx = dimyx)[[1]]
         res <- covariate_placeholder(imm, coords(Q))
 
         prepped_pp_exposures[[i]] <- res
@@ -207,7 +286,7 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
         covar <- covariates[[i]]
         if (is.im(covar)){
             ## new_covar <- interp.im(covar, x = prepped_data[,1], y = prepped_data[,2])
-                new_covar <- covar[list(x = prepped_data[,1], y = prepped_data[,2])]
+            new_covar <- covar[list(x = prepped_data[,1], y = prepped_data[,2])]
         }
         else if (is.function(covar)) {
             if (! identical(names(formals(covar)), c('x', 'y'))) stop('Functional covariates must have formal arguments x and y')
@@ -260,10 +339,16 @@ update_exposure <- function(model, new_exposure) {
             cov <- object$term
             conv_data <- extract_data(newdata[[cov]])
 
+            covlen <- length(conv_data)
+
+            
+
             basis <- list( c(field(conv_data, 'pcov')[[1]]$distances))
             names(basis) <- object$term
-        
+            
             new_basis <- Predict.matrix(object$internal_basis, basis)
+
+            
             object$interpolation_basis <- apply(
                 new_basis, 2,
                 function(basis) convolve_basis(basis,
@@ -284,77 +369,54 @@ update_exposure <- function(model, new_exposure) {
     model
 }
 
-#' @export
-construct_internal_basis <- function(object, conv_data, knots){
-    term <- object$term
-    basis_term <- 'ps'
-    if (length(class(object)) > 1) {
-        basis_term <- str_extract(class(object)[[2]], '[a-zA-Z]+')
-    }
-
-    basis_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim)
-    basis_call$label <- paste0('conv(', term, ')')
-
-    ## local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances)))
-## COME HERE
-
-    local_data <- list(distances = (unique(c(field(conv_data, 'pcov')[[1]]$distances  ))))
-
-
-
- 
-    basis <- smooth.construct(basis_call, data = local_data, knots = knots)
-    basis$og_data <- local_data
-    ## needs to be updated to use a more coherent placeholder covariate
-    basis$X <- Predict.matrix(basis, data = list(distances = c(field(conv_data, 'pcov')[[1]]$distances)))
-    basis
-}
-
-#' @export
-smooth.construct.area.smooth.spec <- function(object, data, knots){
-    areas <- object$xt$areas
-    npoints <- object$xt$npoints
-
-    samples <- map2_dfr(areas, seq_along(areas),
-                    function(area, id) {
-                        st_sample(area, npoints) |>
-                        st_coordinates() |>
-                         as_tibble() |>
-                        mutate(id = id, area = as.numeric(st_area(area)), dxdy = area / npoints)
-    }
-    )
-    object$class <- 'tp.smooth.spec'
-
-    internal_basis <- smooth.construct(s(X,Y), samples, knots)
-
-
-    ## need to turn to integral with appropriate step-sizes
-    ## currently implemented with crude equirectangular approximation
-    evaluated_quadrature <- Predict.matrix(internal_basis, data = samples) |>
-        apply(2, \(x) x * samples$dxdy) |>
-        split.data.frame(samples$id)
-    internal_basis$X <- do.call(rbind, lapply(evaluated_quadrature, colSums))
-    internal_basis
-}
 
 ## required mgcv function
+## this function expects to receive data in the form of a covariate placeholder.
+## The levels are included directly in the data
+## actual coordinates and pcov data is encoded internally in attributes
+
 #' @export
 smooth.construct.conv.smooth.spec <- function(object, data, knots) {
-
+    
     conv_data <- extract_data(data[[object$term]])
     coords <- extract_coords(data[[object$term]])
 
-    basis <- construct_internal_basis(object, conv_data, knots)
-    basis$internal_basis <- basis
+    max_dist_prop <- object$xt$max_dist_prop
+    if (is.null(max_dist_prop)) max_dist_prop <- 0.25
 
+
+    term <- object$term
+
+    ## if no secondary basis is provided default to p-splines
+    basis_term <- 'ps'
+        if (length(class(object)) > 1) {
+            basis_term <- str_extract(class(object)[[2]], '[a-zA-Z]+')
+        }
+
+            
+    intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim)
+    intern_call$label <- paste0('conv(', term, ')')
+
+        ## local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances)))
+   ## TODO     make user configurable and provide better defaults
+    distances <- seq(from = 0, to = max_dist_prop * max(unique(c(field(reduce(conv_data, c), 'pcov')[[1]]$distances))), length.out = 1000)
+    local_data <- list(distances = distances)
+
+
+        ## internal basis construction including penalty
+    basis <- smooth.construct(intern_call, data = local_data, knots = knots)
+    basis$og_data <- local_data
+
+
+    ## I don't think this is necessary?
+    pred_dat <- list(distances = reduce(map(field(reduce(conv_data, c), 'pcov'), 'distances'), c))
+    basis$X <- Predict.matrix(basis, data = pred_dat)
+
+    basis$internal_basis <- intern_basis
     basis$term <- object$term
 
-
-    ## fft on vector form is equivalent to the 2-dimensional fft
-    ## no-need to redimension
-    ## need to verify correctness still
-
-
+    ## then in this step apply this to each marked set seperately
+    ## in that way everything is now pooled
     basis$interpolation_basis <- apply(
         basis$X, 2,
         function(basis) convolve_basis(basis,
@@ -395,7 +457,7 @@ if(experiment <- FALSE){
                       function(x,y) exp(sqrt(scale * (x^2 + y^2))))
 
         kerns[,,k] <- dist
-## problem here but it'll work for now
+        ## problem here but it'll work for now
         adaptconv[,,k] <- Re(fft2shift(fft(fft(surf) * fft(dist), inverse = TRUE)))
         trilinear_interp <- function(x,y, z){
             ## get coords and do trilinear interpolation
@@ -423,39 +485,6 @@ if(experiment <- FALSE){
 
 
 }
-#' @export
-smooth.construct.aconv.smooth.spec <- function(object, data, knots) {
-    conv_data <- extract_data(data[[object$term]])
-    coords <- extract_coords(data[[object$term]])
-
-    basis <- construct_internal_basis(object, conv_data, knots)
-    basis$internal_basis <- basis
-
-    basis$term <- object$term
-
-
-    ## fft on vector form is equivalent to the 2-dimensional fft
-    ## no-need to redimension
-    ## need to verify correctness still
-
-
-    basis$interpolation_basis <- apply(
-        basis$X, 2,
-        function(basis) convolve_basis(basis,
-                                       field(conv_data, 'pcov')[[1]]$covariate,
-                                       field(conv_data, 'pcov')[[1]]$dims,
-                                       field(conv_data, 'pcov')[[1]]$window,
-                                       coords)
-    )
-    class(basis) <- 'Convspline.smooth'
-
-    basis$X <- Predict.matrix.Convspline.smooth(basis, data)
-    basis
-}
-
-
-
-
 
 
 ## required mgcv function
@@ -481,7 +510,7 @@ convolve_basis <- function(basis, for_conv, dims, window, coords){
 
 
     vec <- Re(fft(basis * for_conv, inverse = TRUE) / prod(dim(basis)))
-    as.im(vec[1:dims[1], 1:dims[2]], W = window)
+    spatstat.geom::as.im(vec[1:dims[1], 1:dims[2]], W = window)
 }
 
 

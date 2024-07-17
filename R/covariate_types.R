@@ -1,3 +1,34 @@
+## covariate representations should have methods that make them easily coercible for representation in modeling
+## specifically, there should be a method for evaluating the covariate representation at the points of a quadrature scheme
+
+
+## source('coord.R')
+
+#' @export
+evaluate <- function(object, ...){
+ UseMethod('evaluate')
+}
+
+#' @export
+plot.spatial_covariate <- function(cov, W, ...){
+    plot(spatstat.geom::as.im(function(x,y) evaluate(cov, coord(x,y), ...), W))
+}
+
+#' @export
+as.im.spatial_covariate <- function(cov, W, ...){
+        spatstat.geom::as.im(as_Fcov(function(x,y) evaluate(cov, coord(x,y), ...), W))
+}
+
+#' @export
+evaluate.spatial_covariate <- function(object, ...){
+    stop('Evaluate method not implemented')
+}
+## @param ... <[`dynamic-dots`][rlang::dyn-dots]> What these dots do.
+
+
+
+
+
 #' covariate placeholders should carry the relevant information regarding
 #' the appropriate single level entity  information needed in model fitting (such as mgcv::gam)
 #'  cases include an age, sex, geo-coordinate (x,y), or possibly higher order coordinates, (x,y,t, w) for extra w
@@ -6,27 +37,59 @@
 
 ## the goal of these is to get mgcv to work in a friendly way
 ## ' min.covariate_placeholder <- function(pl, ...) {min(extract_coords(pl)$x, ...)}
-## ' max.covariate_placeholder <- function(pl, ...) {max(extract_coords(pl)$x, ...)}
+## ' max.covariate_placeholder <- function(pl, ...) {max(extract_coords(pl)$x, ...)}]
 #'  @export
-
-
+covariate_placeholder <- function(data, coords){
+    if(is.ppp(data)) {
+        return(covariate_placeholder_single(data, coords))
+    } else {
+        return(covariate_placeholder_multi(data, coords))
+    }
+}
 
 #'  @export
-covariate_placeholder <- function(data, coords) {
-
-  id <- .GlobalCount
- name <- paste0('placeholder', id)
+covariate_placeholder_single <- function(data, coords) {
+        
+    id <- 1L
+    name <- paste0('placeholder', id)
    
- res <- structure(rep(id, nrow(coords)),
-                  class = c('covariate_placeholder', 'numeric'),
-                  assoc = list( coords = coords, data = data))
+    res <- structure(rep(id, nrow(coords)),
+                     class = c('covariate_placeholder', 'numeric'),
+                     coords = coords,
+                     levels = 1,
+                     data = data)
 }
 
 
-#' @export
+## Assume all point processes in data will be evaluated at the same set of coords
+#'  @export
+covariate_placeholder_multi <- function(data, coords) {
+
+    datalist <- data
+    placeholders <- rep(seq_along(data), each = nrow(coords))
+
+    structure(placeholders,
+              class = c('covariate_placeholder', 'numeric'),
+              data = data,
+              levels = 1:length(datalist),
+              coords = coords)
+}
+
+
+
+
+
+#' @exportS3Method
 print.covariate_placeholder <- function(object){
-  cat('A Covariate Placeholder\n')
+    cat('A Covariate Placeholder\n')
+    cat('With levels: {')
+    levels <- attr(object, 'levels')
+    cat(levels)
+    cat('} and ', nrow(attr(object, 'coords')), ' coordinates.')
+    cat('\n')
 }
+
+
 #' @export
 `[.covariate_placeholder` <- function(object, ...){
   covariate_placeholder(extract_data(object), extract_coords(object)[...,])
@@ -150,19 +213,10 @@ evaluate.spatial_covariate <- function(object, ...){
 
 #
 #' Preparation of Convolutional Covariate Representations
-#'
-#' @param object
-#' @param W
-#' @param dimyx
-#' @param fractional
-#' @param normalize
-#'
-#' @return
 #' @export
-#'
-#' @examples
-conv_prepare <- function(object, W, dimyx, fractional, normalize){
-    object$window <- spatstat.geom::union.owin(object$window, W)
+conv_prepare <- function(object, dimyx, fractional, normalize) {
+    ## W as a possible buffer region?
+    ## object$window <- spatstat.geom::union.owin(object$window, W)
 
     ## DivideByPixelArea guarantees that the integral of the rasterized process equals the
     ## actual value of the process, e.g. perfom normalization
@@ -227,13 +281,14 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
 
 ## W and dimyx should be moved into the attributes of the vector
 ## likewise distance and angle information should be shared between all covariates
-Pcov <- function(..., W , dimyx, fractional = FALSE ){
-  covars <- rlang::list2(...)
+Pcov <- function(..., dimyx = c(128, 128), fractional = FALSE ){
+    covars <- rlang::list2(...)
+
   prepped <- vector('list', length = length(covars))
   for (i in seq_along(covars)){
     covar <- covars[[i]]
 
-    prepped[[i]] <- Pcov_prepare(covar, W, dimyx, fractional)
+    prepped[[i]] <- Pcov_prepare(covar,  dimyx, fractional)
 
   }
 
@@ -243,11 +298,11 @@ Pcov <- function(..., W , dimyx, fractional = FALSE ){
 
 #' @export
 format.Pcov <- function(object, ...){
-  rep('Pcov', vec_size(object))
+  rep('Pcov', vctrs::vec_size(object))
 }
 
 #' @export
-Pcov_prepare <- function(object, W, dimyx, fractional){
+Pcov_prepare <- function(object,  dimyx, fractional){
   UseMethod('Pcov_prepare')
 }
 
@@ -257,7 +312,7 @@ evaluate.Pcov <- function(object, locations, kernel, ...){
 
   evaluate_single <- function(p, kernel, locations){
     conved <- fft(fft(kernel(p$distances)) * p$covariate, inverse = TRUE) / prod(p$dims)
-    pim <- as.im(Re(matrix(conved[1:p$dims[[1]], 1:p$dims[[2]]])), W = p$window, dimyx = p$dimyx)
+    pim <- spastat.geom::as.im(Re(matrix(conved[1:p$dims[[1]], 1:p$dims[[2]]])), W = p$window, dimyx = p$dimyx)
     interp.im(pim, coordx(locations), coordy(locations))
   }
 
@@ -282,8 +337,13 @@ setup.Pcov <- function(object, locations){
 }
 
 #' @export
-Pcov_prepare.ppp <- function(object, W, dimyx, fractional){
-  conv_prepare(object, W, dimyx, fractional, normalize = TRUE)
+Pcov_prepare.ppp <- function(object, dimyx, fractional){
+  conv_prepare(object, dimyx = dimyx, fractional = fractional, normalize = TRUE)
+}
+
+#' @export
+Pcov_prepare.list <- function(object, dimyx, fraction){
+    map(object, \(ob) conv_prepare(ob, dimyx, fraction, normalize = TRUE))
 }
 
 #' @export
@@ -557,5 +617,5 @@ Lcov_prepare <- function(object, W, dimyx, fractional){
 
 #' @export
 Lcov_prepare.linnet <- function(object, W, dimyx, fractional){
-  conv_prepare(object, W, dimyx, fractional, normalize = FALSE)
+  conv_prepare(object, dimyx, fractional, normalize = FALSE)
 }
