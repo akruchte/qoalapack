@@ -263,6 +263,8 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
     gam_data
 }
 
+
+## TODO
 #' @export
 update_exposure <- function(model, new_exposure) {
 
@@ -463,23 +465,32 @@ smooth.construct.lconv.smooth.spec <- function(object, data, knots) {
         ncols <- ncol(Xloc)
         interp_basis <- vector(mode = 'list', length = ncols)
 
+    convolve_basis <- function(basis, for_conv, dims, window, coords){
+        basis <- fft(basis)
+        dim(basis) <- dims * 2
+
+
+        vec <- Re(fft(basis * for_conv, inverse = TRUE) / prod(dim(basis)))
+        spatstat.geom::as.im(vec[1:dims[1], 1:dims[2]], W = window)
+    }
+
     
     for(j in 1:ncols) {
 
         covar <- lcd$covariate
         dims <- lcd$dims
         window <- lcd$window
-        convolve_basis(Xloc[,j], covar, dims, window, coords)
+        lc <- convolve_basis(Xloc[,j], covar, dims, window, coords)
 
-            interp_basis[[col]] <- lc
-        }
+        interp_basis[[j]] <- lc
+       }
         
         
 
 
     ## then in this step apply this to each marked set seperately
     ## in that way everything is now pooled
-    basis$interpolation_basis <- bases
+    basis$interpolation_basis <- list(interp_basis)
 
     class(basis) <- 'Convspline.smooth'
 
@@ -496,52 +507,6 @@ smooth.construct.lconv.smooth.spec <- function(object, data, knots) {
 ## and then add an additional adaptive surface penalty
 
 
-
-if(experiment <- FALSE){
-    adapt_resolution <- 128
-    max <-1
-    adapt_scaling <-seq(from = 0.01, to = max, length.out = adapt_resolution)
-
-    surf <- as.matrix(as.im(swedishpines))
-    arrk <- array(data = 0, dim = c(128, 128, 128))
-    adaptconv <- arrk
-    kerns  <- arrk
-    for (k in 1:adapt_resolution) {
-        arrk[,,k] <-surf
-        scale <-adapt_scaling[k]
-        dist <- outer(seq(from = -1, to = 1, length.out = 128),
-                      seq(from = -1, to = 1, length.out = 128),
-                      function(x,y) exp(sqrt(scale * (x^2 + y^2))))
-
-        kerns[,,k] <- dist
-        ## problem here but it'll work for now
-        adaptconv[,,k] <- Re(fft2shift(fft(fft(surf) * fft(dist), inverse = TRUE)))
-        trilinear_interp <- function(x,y, z){
-            ## get coords and do trilinear interpolation
-        }
-
-        ## z is a height function of time that determines convolutional scale.
-        ## We extend the model with regularity terms capturing adaptive structure.
-
-
-    }
-
-
-    Y <- swedishpines
-    Q <- quadscheme(Y)
-    mpl_prepare(Y, Q, ppcov = Y, covariates = NULL)
-
-
-
-
-    ## then do slice by slice convolution
-    ## is there a reason to consider 3d-convolution? It might make sense.
-
-    ## Then the resulting convolutional kernel can be identified by evaluating according to some varietal structure.
-    ## We'll assume that K(D, \alpha) where alpha is itselfa function of space.
-
-
-}
 
 
 ## required mgcv function

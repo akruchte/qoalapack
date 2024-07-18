@@ -670,10 +670,11 @@ as_Lcov.im <- function(immat) {
                    atan2)
     angle <- fft2shift(angle)
 
+    window <- owin(immat$xrange, immat$yrange)
 
    out <- list(covariate = for_conv,
          half_dists = half_dists,
-         window = immat$window,
+         window = window,
          dims = dimyx,
          distances = dists,
          angle = angle,
@@ -681,7 +682,7 @@ as_Lcov.im <- function(immat) {
          )
 
 
-    out <- vctrs::new_rcrd(list(pcov = out),
+    out <- vctrs::new_rcrd(list(pcov = list(out)),
                     class = c('Lcov', 'spatial_covariate'))
     out
 }
