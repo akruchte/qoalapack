@@ -4,6 +4,8 @@
 
 
 test_outcome_mod <- function() {
+    library(tidyverse)
+    library(spatstat)
     set.seed(0)
     gen_covar <- function(...) spatstat.random::rpoispp(35)
     Ys <- map(1:5, gen_covar)
@@ -15,61 +17,12 @@ test_outcome_mod <- function() {
 
     pc <- covariate_placeholder(pcovs, coords(points))
 
-    
-    
+    Yout <-     rnorm(163)
+
+    df <- tibble(out = rnorm(815), cov = pc)
+
+    gam(out ~ s(cov, bs = 'conv'), data = df)
 }
-
-## eval_scheme and outcome must correspond!!!
-## this is not checked right now!!!
-#' @export
-mod_rep <- function(Pcovlist){
-        
-    prepped_pp_exposures <- vector(mode = 'list', length(ppcov))
-    names(prepped_pp_exposures) <- names(ppcov)
-
-    for(i in seq_along(ppcov)) {
-
-        ## W = Y$window,
-        imm <- Pcov(ppcov[[i]],  dimyx = dimyx)[[1]]
-        res <- covariate_placeholder(imm, coords(Q))
-
-        prepped_pp_exposures[[i]] <- res
-    }
-
-    prepped_covariates <- vector(mode = 'list', length(ppcov))
-    names(prepped_covariates) <- names(covariates)
-    
-    for (i in seq_along(covariates)){
-        covar <- covariates[[i]]
-        if (is.im(covar)){
-            ## new_covar <- interp.im(covar, x = prepped_data[,1], y = prepped_data[,2])
-            new_covar <- covar[list(x = prepped_data[,1], y = prepped_data[,2])]
-        }
-        else if (is.function(covar)) {
-            if (! identical(names(formals(covar)), c('x', 'y'))) stop('Functional covariates must have formal arguments x and y')
-            new_covar <- covar(prepped_data[,1], prepped_data[,2])
-        }
-
-        else {
-            stop('Covariates must be passed as either functions of x and y arguments or images')
-        }
-        prepped_covariates[[i]] <- new_covar
-
-    }
-
-    gam_data <- bind_cols(
-        prepped_data,
-        prepped_pp_exposures,
-        prepped_covariates
-    )
-
-    
-    gam_data
-}
-
-
-
-
 
 
 ## library(mgcv)
@@ -378,7 +331,7 @@ update_exposure <- function(model, new_exposure) {
 #' @export
 smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     
-    conv_data <- extract_data(data[[object$term]])
+    conv_data <- purrr::reduce(extract_data(data[[object$term]]), c)
     coords <- extract_coords(data[[object$term]])
 
     max_dist_prop <- object$xt$max_dist_prop
@@ -410,27 +363,131 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
     ## I don't think this is necessary?
     pred_dat <- list(distances = reduce(map(field(reduce(conv_data, c), 'pcov'), 'distances'), c))
-    basis$X <- Predict.matrix(basis, data = pred_dat)
 
-    basis$internal_basis <- intern_basis
+
+    basis$internal_basis <- basis
     basis$term <- object$term
 
     ## then in this step apply this to each marked set seperately
     ## in that way everything is now pooled
-    basis$interpolation_basis <- apply(
-        basis$X, 2,
-        function(basis) convolve_basis(basis,
-                                       field(conv_data, 'pcov')[[1]]$covariate,
-                                       field(conv_data, 'pcov')[[1]]$dims,
-                                       field(conv_data, 'pcov')[[1]]$window,
-                                       coords)
-    )
+
+    local_conv <- function(to_conv, pcovar, coords) {
+        covar <- pcovar$covariate
+        dims <- pcovar$dims
+        window <- pcovar$window
+        convolve_basis(to_conv, covar, dims, window, coords)
+    }
+    
+    bases <- vector(mode = 'list', length = length(conv_data))
+    
+    for (i in seq_along(bases)){
+        lcd <- field(conv_data, 'pcov')[[i]]
+        pred_dat <- list(distances = lcd$distances)
+        Xloc <- Predict.matrix(basis$internal_basis, data = pred_dat)
+        Xout <- 0 * Xloc
+
+        ncols <- ncol(Xloc)
+        interp_basis <- vector(mode = 'list', length = ncols)
+        
+        for(col in 1:ncols) {
+            lc <- local_conv(Xloc[,col], lcd)
+
+            interp_basis[[col]] <- lc
+        }
+        bases[[i]] <- interp_basis
+        
+    }
+
+    ## then in this step apply this to each marked set seperately
+    ## in that way everything is now pooled
+    basis$interpolation_basis <- bases
+
     class(basis) <- 'Convspline.smooth'
 
     basis$X <- Predict.matrix.Convspline.smooth(basis, data)
     basis
 
 }
+
+
+smooth.construct.lconv.smooth.spec <- function(object, data, knots) {
+    
+    conv_data <- extract_data(data[[object$term]])
+    coords <- extract_coords(data[[object$term]])
+
+    max_dist_prop <- object$xt$max_dist_prop
+    if (is.null(max_dist_prop)) max_dist_prop <- 0.25
+
+
+    term <- object$term
+
+    ## if no secondary basis is provided default to p-splines
+    basis_term <- 'ps'
+        if (length(class(object)) > 1) {
+            basis_term <- str_extract(class(object)[[2]], '[a-zA-Z]+')
+        }
+
+            
+    intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim)
+    intern_call$label <- paste0('conv(', term, ')')
+
+        ## local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances)))
+   ## TODO     make user configurable and provide better defaults
+    distances <- seq(from = 0, to = max_dist_prop * max(unique(c(field(reduce(conv_data, c), 'pcov')[[1]]$distances))), length.out = 1000)
+
+    
+    local_data <- list(distances = distances)
+
+
+        ## internal basis construction including penalty
+    basis <- smooth.construct(intern_call, data = local_data, knots = knots)
+    basis$og_data <- local_data
+
+
+    ## I don't think this is necessary?
+    pred_dat <- list(distances = reduce(map(field(reduce(conv_data, c), 'pcov'), 'distances'), c))
+
+
+    basis$internal_basis <- basis
+    basis$term <- object$term
+
+    ## then in this step apply this to each marked set seperately
+    ## in that way everything is now pooled
+
+    
+        lcd <- field(conv_data, 'pcov')[[1]]
+        pred_dat <- list(distances = lcd$distances)
+        Xloc <- Predict.matrix(basis$internal_basis, data = pred_dat)
+        Xout <- 0 * Xloc
+
+        ncols <- ncol(Xloc)
+        interp_basis <- vector(mode = 'list', length = ncols)
+
+    
+    for(j in 1:ncols) {
+
+        covar <- lcd$covariate
+        dims <- lcd$dims
+        window <- lcd$window
+        convolve_basis(Xloc[,j], covar, dims, window, coords)
+
+            interp_basis[[col]] <- lc
+        }
+        
+        
+
+
+    ## then in this step apply this to each marked set seperately
+    ## in that way everything is now pooled
+    basis$interpolation_basis <- bases
+
+    class(basis) <- 'Convspline.smooth'
+
+    basis$X <- Predict.matrix.Convspline.smooth(basis, data)
+    basis
+
+}
+
 
 
 
@@ -492,15 +549,30 @@ if(experiment <- FALSE){
 #' @export
 Predict.matrix.Convspline.smooth <- function(object, data) {
 
-    ## add a secondary check, if data are passed directly as coordinates just predict directly at those points
     coords <- extract_coords(data[[object$term]])
 
     interp_basis <- object$interpolation_basis
+    ncoord <- nrow(coords)
+    nr <- ncoord * length(interp_basis)
+    nc <- length(interp_basis[[1]])
+    Xmat <- matrix(0, nrow = nr, ncol = nc)
 
-    interped <- lapply(interp_basis, function(basis) interp.im(basis, coords))
-    ## possible alternative
-    ## interped <- lapply(interp_basis, function(basis) basis[ coords])
-    do.call(cbind, interped)
+
+    for (i in 1:length(interp_basis)){
+        locinterp <- interp_basis[[i]]
+        
+        for (j in 1:nc){
+            
+            row_range <- (((i - 1) * ncoord) + 1) : (((i) * ncoord) )
+            
+            Xmat[row_range, j] <- spatstat.geom::interp.im(locinterp[[j]], coords)
+        }
+    }
+
+    Xmat
+
+
+    
 }
 
 #' @export

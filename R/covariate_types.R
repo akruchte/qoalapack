@@ -47,6 +47,20 @@ covariate_placeholder <- function(data, coords){
     }
 }
 
+#' @export
+covariate_placeholder_im <- function(data, coords) {
+        
+    id <- 1L
+    name <- paste0('placeholder', id)
+   
+    res <- structure(rep(id, nrow(coords)),
+                     class = c('covariate_placeholder', 'numeric'),
+                     coords = coords,
+                     levels = 1,
+                     data = data)
+}
+
+
 #'  @export
 covariate_placeholder_single <- function(data, coords) {
         
@@ -214,13 +228,15 @@ evaluate.spatial_covariate <- function(object, ...){
 #
 #' Preparation of Convolutional Covariate Representations
 #' @export
-conv_prepare <- function(object, dimyx, fractional, normalize) {
+conv_prepare <- function(object, dimyx){
+    fractional = TRUE
+    normalize = TRUE
     ## W as a possible buffer region?
     ## object$window <- spatstat.geom::union.owin(object$window, W)
 
     ## DivideByPixelArea guarantees that the integral of the rasterized process equals the
     ## actual value of the process, e.g. perfom normalization
-    immat <- spatstat.geom::pixellate(object, DivideByPixelArea = normalize, fractional = fractional)
+    immat <- spatstat.geom::pixellate(object, DivideByPixelArea = TRUE, fractional = TRUE)
     ## establish coordinates of convolution raster
     ## the convolution raster extends out twice past the window in order to prevent circular convolution
     xcoords <- seq(from = immat$xrange[[1]], to = 2 * immat$xrange[[2]], length.out = 2 * dimyx[[1]])
@@ -281,14 +297,14 @@ conv_prepare <- function(object, dimyx, fractional, normalize) {
 
 ## W and dimyx should be moved into the attributes of the vector
 ## likewise distance and angle information should be shared between all covariates
-Pcov <- function(..., dimyx = c(128, 128), fractional = FALSE ){
+Pcov <- function(..., dimyx = c(128, 128)) {
     covars <- rlang::list2(...)
 
   prepped <- vector('list', length = length(covars))
   for (i in seq_along(covars)){
     covar <- covars[[i]]
 
-    prepped[[i]] <- Pcov_prepare(covar,  dimyx, fractional)
+    prepped[[i]] <- Pcov_prepare(covar,  dimyx)
 
   }
 
@@ -337,13 +353,13 @@ setup.Pcov <- function(object, locations){
 }
 
 #' @export
-Pcov_prepare.ppp <- function(object, dimyx, fractional){
-  conv_prepare(object, dimyx = dimyx, fractional = fractional, normalize = TRUE)
+Pcov_prepare.ppp <- function(object, dimyx){
+  conv_prepare(object, dimyx = dimyx)
 }
 
 #' @export
-Pcov_prepare.list <- function(object, dimyx, fraction){
-    map(object, \(ob) conv_prepare(ob, dimyx, fraction, normalize = TRUE))
+Pcov_prepare.list <- function(object, dimyx){
+    map(object, \(ob) conv_prepare(ob, dimyx))
 }
 
 #' @export
@@ -578,13 +594,15 @@ format.Ecov <- function(ob, ...){
 ## pixellated version of the process
 ## additional attributes include the oservation window of the process and the dimensions of the process
 #' @export
-Lcov <- function(..., W = NULL, dimyx = c(128, 128)){
+Lcov <- function(..., dimyx = c(128, 128)){
+
+  
   covars <- rlang::list2(...)
 
   for (i in seq_along(covars)){
     covar <- covars[i]
 
-    covar[[i]] <- Lcov_prepare(covar[[i]], W, dimyx, fractional)
+    covar[[i]] <- Lcov_prepare(covar[[i]], W, dimyx)
   }
 
   vctrs::new_rcrd(list(pcov = covars),
@@ -610,12 +628,60 @@ Lcov_prepare.default <- function(object, ...){
 }
 
 #' @export
-Lcov_prepare <- function(object, W, dimyx, fractional){
+Lcov_prepare <- function(object, W, dimyx){
   UseMethod('Lcov_prepare')
 }
 
 
 #' @export
-Lcov_prepare.linnet <- function(object, W, dimyx, fractional){
-  conv_prepare(object, dimyx, fractional, normalize = FALSE)
+Lcov_prepare.linnet <- function(object, W, dimyx){
+  conv_prepare(object, dimyx)
+}
+
+#' @export
+as_Lcov.im <- function(immat) {
+    dimyx <- immat$dim
+    ## establish coordinates of convolution raster
+    ## the convolution raster extends out twice past the window in order to prevent circular convolution
+    xcoords <- seq(from = immat$xrange[[1]], to = 2 * immat$xrange[[2]], length.out = 2 * dimyx[[1]])
+    ycoords <- seq(from = immat$yrange[[1]], to = 2 * immat$yrange[[2]], length.out = 2 * dimyx[[2]])
+
+
+    ## construct matrix, zero pad, and then perform fft
+    for_conv <- matrix(0, nrow = dimyx[[1]] * 2, ncol = dimyx[[2]] * 2)
+    for_conv[1:dimyx[[1]], 1:dimyx[[2]]] <- immat$v
+    for_conv <- fft(for_conv)
+
+
+    ## fft2shift is used after each to prevent phase issues down the line
+    ## performing the fft shift during construction guarantees correctness of convolutions later without requiring complex tracking of indices
+    ## setup distances matrix
+    dists <- outer(xcoords - median(xcoords),
+                   ycoords - median(ycoords),
+                   \(x,y) sqrt(x^2 + y^2))
+
+
+    half_dists <- seq(from = 0, to = max(dists), length.out = ceiling(dim(dists)[[1]]/2))
+
+    dists <- fft2shift(dists)
+    ## setup angle orientation matrix
+    angle <- outer(xcoords - median(xcoords),
+                   ycoords - median(ycoords),
+                   atan2)
+    angle <- fft2shift(angle)
+
+
+   out <- list(covariate = for_conv,
+         half_dists = half_dists,
+         window = immat$window,
+         dims = dimyx,
+         distances = dists,
+         angle = angle,
+         unique_dists = unique(dists)
+         )
+
+
+    out <- vctrs::new_rcrd(list(pcov = out),
+                    class = c('Lcov', 'spatial_covariate'))
+    out
 }
