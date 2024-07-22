@@ -81,7 +81,6 @@ covariate_placeholder_multi <- function(data, coords) {
 
     datalist <- data
     placeholders <- rep(seq_along(data), each = nrow(coords))
-
     structure(placeholders,
               class = c('covariate_placeholder', 'numeric'),
               data = data,
@@ -106,7 +105,7 @@ print.covariate_placeholder <- function(object){
 
 #' @export
 `[.covariate_placeholder` <- function(object, ...){
-  covariate_placeholder(extract_data(object), extract_coords(object)[...,])
+  covariate_placeholder(extract_data(object), extract_coords(object))
 }
 
 #' @export
