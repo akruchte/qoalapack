@@ -3,37 +3,7 @@
 ## examples for documentation
 
 
-test_outcome_mod <- function() {
-    library(tidyverse)
-    library(spatstat)
-    set.seed(0)
-    gen_covar <- function(...) spatstat.random::rpoispp(35)
-    Ys <- map(1:5, gen_covar)
-    Xs <- map(1:5, gen_covar)
 
-    points <- reduce(Ys, superimpose)
-
-    pcovs <- map(Xs, Pcov)
-
-    pc <- covariate_placeholder(pcovs, coords(points))
-
-    Yout <-    rnorm(163)
-
-    df <- tibble(out = rnorm(815), cov = pc)
-
-    gam(out ~ s(cov, bs = 'conv'), data = df)
-}
-
-
-## library(mgcv)
-## library(pracma)
-
-## library(spatstat)
-## library(dplyr)
-## library(purrr)
-## library(stringr)
-## library(glue)
-## library(rlang)
 
 
 ## crude temporary implementation of outcome model
@@ -336,29 +306,33 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     conv_data <- purrr::reduce(extract_data(data[[object$term]]), c)
     coords <- extract_coords(data[[object$term]])
 
-    max_dist_prop <- object$xt$max_dist_prop
+    extra <- object$xt
+    max_dist_prop <- extra$max_dist_prop
+
+    ## this should probably be removed
     if (is.null(max_dist_prop)) max_dist_prop <- 0.25
 
 
     term <- object$term
 
-    ## if no secondary basis is provided default to p-splines
+    ## if no secondary basis is provided default to b-splines
     basis_term <- 'bs'
-        if (length(class(object)) > 1) {
-            basis_term <- str_extract(class(object)[[2]], '[a-zA-Z]+')
-        }
+    if (length(class(object)) > 1) {
+        ## TODO restrict to specific eligible options
+        basis_term <- str_extract(class(object)[[2]], '[a-zA-Z]+')
+    } else {basis_term <- 'bs'}
+    
 
-            
     intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim)
     intern_call$label <- paste0('conv(', term, ')')
-
-        ## local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances)))
+    
+    ## local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances)))
     ## TODO     make user configurable and provide better defaults
     distances <- seq(from = 0, to = max_dist_prop * max(unique(c(field(reduce(conv_data, c), 'pcov')[[1]]$distances))), length.out = 1000)
     neg_buf <- -rev(distances[2:10])
     local_data <- list(distances = c(neg_buf, distances))
 
-        ## internal basis construction including penalty
+    ## internal basis construction including penalty
     basis <- smooth.construct(intern_call, data = local_data, knots = knots)
     basis$og_data <- local_data
 
@@ -410,7 +384,7 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
 }
 
-
+#' @export
 smooth.construct.lconv.smooth.spec <- function(object, data, knots) {
     
     conv_data <- extract_data(data[[object$term]])
@@ -550,6 +524,7 @@ convolve_basis <- function(basis, for_conv, dims, window, coords){
 
 
 ## modified from mgcv
+#' @export
 smooth.construct.bs2.smooth.spec <- function(object,data,knots) {
 ## a B-spline constructor method function
   ## get orders: m[1] is spline order, 3 is cubic. m[2] is order of derivative in penalty.
@@ -657,18 +632,18 @@ smooth.construct.bs2.smooth.spec <- function(object,data,knots) {
   object
 } ### end of B-spline constructor
 
-Predict.matrix.Bspline.smooth <- function(object,data) {
+#' @export
+Predict.matrix.Bspline2.smooth <- function(object,data) {
   object$mono <- 0
   object$m <- object$m - 1 ## for consistency with p-spline defn of m
   Predict.matrix.pspline.smooth(object,data)
 }
 
 
-#######################################################################
-# Smooth-factor interactions. Efficient alternative to s(x,by=fac,id=1) 
-#######################################################################
-smooth.info.fs.smooth.spec <- function(object) {
-  object$tensor.possible <- TRUE ## signal that a tensor product construction is possible here
-  object
-}
 
+
+#' @export
+sgam <- function(formula, data, conv_control ) {
+    
+    
+}

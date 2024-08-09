@@ -1,7 +1,3 @@
-library(tidyverse)
-library(rlang)
-library(vctrs)
-
 dens <- function(x) exp(-(x^2))
 metropolis <- function(dens, niter = 100){
 
@@ -20,20 +16,4 @@ metropolis <- function(dens, niter = 100){
         past <- proposal
     }
     samples
-}
-
-
-
-
-if (FALSE) {
-    library(tidyverse)
-    library(spatstat)
-    library(sf)
-
-    library(arrow)
-
-
-    points <-runifpoint(100)
-
-    write_parquet(coords(points), "~Desktop/test_points.parquet")
 }
