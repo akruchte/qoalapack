@@ -59,11 +59,6 @@ outcome_fun <- function(omodel, prediction_locations){
 ## formula extractor
 ## deconstruct formula and determine relevant terms, etc
 
-#' @export
-ordinal_model <- function(){
-    gam(outcome ~ s(x,y), family = ocat(R = n))
-}
-
 ## this should be the principle function
 ## it should receive datastructures representing the data, model specifications, control specs, prediction locations, and everything else
 ## needed for ultimate use of the outcome model in causal estimation
@@ -309,6 +304,7 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     extra <- object$xt
     max_dist_prop <- extra$max_dist_prop
 
+
     ## this should probably be removed
     if (is.null(max_dist_prop)) max_dist_prop <- 0.25
 
@@ -544,6 +540,7 @@ smooth.construct.bs2.smooth.spec <- function(object,data,knots) {
     xl <- min(k);xu <- max(k);
     if (xl>min(x)||xu<max(x)) stop("knot range does not include data")
   }
+    
   if (!is.null(k)&&length(k)==4&&length(k)<nk+2*m[1]) {
     ## 4 knots supplied: lower prediction limit, lower data limit,
     ##   upper data limit, upper prediction limit
