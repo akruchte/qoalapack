@@ -1,35 +1,111 @@
+## covariate representations should have methods that make them easily coercible for representation in modeling
+## specifically, there should be a method for evaluating the covariate representation at the points of a quadrature scheme
+
+
+## source('coord.R')
+
+#' @export
+evaluate <- function(object, ...){
+ UseMethod('evaluate')
+}
+
+#' @export
+plot.spatial_covariate <- function(cov, W, ...){
+    plot(spatstat.geom::as.im(function(x,y) evaluate(cov, coord(x,y), ...), W))
+}
+
+#' @export
+as.im.spatial_covariate <- function(cov, W, ...){
+        spatstat.geom::as.im(as_Fcov(function(x,y) evaluate(cov, coord(x,y), ...), W))
+}
+
+#' @export
+evaluate.spatial_covariate <- function(object, ...){
+    stop('Evaluate method not implemented')
+}
+## @param ... <[`dynamic-dots`][rlang::dyn-dots]> What these dots do.
+
+
+
+
+
 #' covariate placeholders should carry the relevant information regarding
 #' the appropriate single level entity  information needed in model fitting (such as mgcv::gam)
 #'  cases include an age, sex, geo-coordinate (x,y), or possibly higher order coordinates, (x,y,t, w) for extra w
-#' @export
-placeholder_value <- function(value) {
-  structure(value, class = c('placeholder_value', 'numeric'))
-}
-print.placeholder_value <- function(value) {
-  cat(str_glue('(({value}))\n\n'))
-}
-
 
 
 
 ## the goal of these is to get mgcv to work in a friendly way
 ## ' min.covariate_placeholder <- function(pl, ...) {min(extract_coords(pl)$x, ...)}
-## ' max.covariate_placeholder <- function(pl, ...) {max(extract_coords(pl)$x, ...)}
+## ' max.covariate_placeholder <- function(pl, ...) {max(extract_coords(pl)$x, ...)}]
+#'  @export
+covariate_placeholder <- function(data, coords){
+    if(is.ppp(data)) {
+        return(covariate_placeholder_single(data, coords))
+    } else {
+        return(covariate_placeholder_multi(data, coords))
+    }
+}
+
+#' @export
+covariate_placeholder_im <- function(data, coords) {
+        
+    id <- 1L
+    name <- paste0('placeholder', id)
+   
+    res <- structure(rep(id, nrow(coords)),
+                     class = c('covariate_placeholder', 'numeric'),
+                     coords = coords,
+                     levels = 1,
+                     data = data)
+}
+
 
 #'  @export
-covariate_placeholder <- function(data, coords) {
-  structure(rep(placeholder_value(1), nrow(coords)),
-            class = c('covariate_placeholder', 'numeric'),
-            coords = coords,
-            data = data)
+covariate_placeholder_single <- function(data, coords) {
+        
+    id <- 1L
+    name <- paste0('placeholder', id)
+   
+    res <- structure(rep(id, nrow(coords)),
+                     class = c('covariate_placeholder', 'numeric'),
+                     coords = coords,
+                     levels = 1,
+                     data = data)
 }
 
+
+## Assume all point processes in data will be evaluated at the same set of coords
+#'  @export
+covariate_placeholder_multi <- function(data, coords) {
+
+    datalist <- data
+    placeholders <- rep(seq_along(data), each = nrow(coords))
+    structure(placeholders,
+              class = c('covariate_placeholder', 'numeric'),
+              data = data,
+              levels = 1:length(datalist),
+              coords = coords)
+}
+
+
+
+
+
+#' @exportS3Method
 print.covariate_placeholder <- function(object){
-  cat('A Covariate Placeholder\n')
+    cat('A Covariate Placeholder\n')
+    cat('With levels: {')
+    levels <- attr(object, 'levels')
+    cat(levels)
+    cat('} and ', nrow(attr(object, 'coords')), ' coordinates.')
+    cat('\n')
 }
 
+
+#' @export
 `[.covariate_placeholder` <- function(object, ...){
-  covariate_placeholder(extract_data(object), extract_coords(object)[...,])
+  covariate_placeholder(extract_data(object), extract_coords(object))
 }
 
 #' @export
@@ -69,7 +145,7 @@ Rcov <- function(..., interpolator = c('bilin', 'bin', 'spatstat')) {
 
   rasters <- lapply(rasters, convert_raster)
 
-  new_rcrd(list(rasters = rasters),
+  vctrs::new_rcrd(list(rasters = rasters),
            interpolator = interpolator,
            class = c('Rcov', 'spatial_covariate'))
 }
@@ -126,19 +202,22 @@ convert_raster.default <- function(object, ...){
 evaluate <- function(object, ...){
  UseMethod('evaluate')
 }
-
+#' @export
 evaluate.numeric <- function(object, locations){
     n <- nrow(locations)
     rep(object, each = n)
 }
-
+#' @export
 plot.spatial_covariate <- function(cov, W, ...){
     plot(spatstat.geom::as.im(function(x,y) evaluate(cov, coord(x,y), ...), W))
 }
+
+#' @export
 as.im.spatial_covariate <- function(cov, W, ...){
         spatstat.geom::as.im(as_Fcov(function(x,y) evaluate(cov, coord(x,y), ...), W))
 }
 
+#' @export
 evaluate.spatial_covariate <- function(object, ...){
     stop('Evaluate method not implemented')
 }
@@ -147,23 +226,16 @@ evaluate.spatial_covariate <- function(object, ...){
 
 #
 #' Preparation of Convolutional Covariate Representations
-#'
-#' @param object
-#' @param W
-#' @param dimyx
-#' @param fractional
-#' @param normalize
-#'
-#' @return
 #' @export
-#'
-#' @examples
-conv_prepare <- function(object, W, dimyx, fractional, normalize){
-    object$window <- spatstat.geom::union.owin(object$window, W)
+conv_prepare <- function(object, dimyx){
+    fractional = TRUE
+    normalize = TRUE
+    ## W as a possible buffer region?
+    ## object$window <- spatstat.geom::union.owin(object$window, W)
 
     ## DivideByPixelArea guarantees that the integral of the rasterized process equals the
     ## actual value of the process, e.g. perfom normalization
-    immat <- spatstat.geom::pixellate(object, DivideByPixelArea = normalize, fractional = fractional)
+    immat <- spatstat.geom::pixellate(object, DivideByPixelArea = TRUE, fractional = TRUE)
     ## establish coordinates of convolution raster
     ## the convolution raster extends out twice past the window in order to prevent circular convolution
     xcoords <- seq(from = immat$xrange[[1]], to = 2 * immat$xrange[[2]], length.out = 2 * dimyx[[1]])
@@ -183,6 +255,7 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
                    ycoords - median(ycoords),
                    \(x,y) sqrt(x^2 + y^2))
 
+
     half_dists <- seq(from = 0, to = max(dists), length.out = ceiling(dim(dists)[[1]]/2))
 
     dists <- fft2shift(dists)
@@ -198,15 +271,14 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
          window = object$window,
          dims = dimyx,
          distances = dists,
-         angle = angle
+         angle = angle,
+         unique_dists = unique(dists)
          )
 }
 
 
 
 #' Pcov
-
-
 #' Pcov is meant for point process valued data,
 #' an object of type 'ppp' or sf POINT objects can be handled as data input
 
@@ -222,34 +294,38 @@ conv_prepare <- function(object, W, dimyx, fractional, normalize){
 
 ## W and dimyx should be moved into the attributes of the vector
 ## likewise distance and angle information should be shared between all covariates
-Pcov <- function(..., W , dimyx, fractional = FALSE ){
-  covars <- rlang::list2(...)
+Pcov <- function(..., dimyx = c(128, 128)) {
+    covars <- rlang::list2(...)
+
   prepped <- vector('list', length = length(covars))
   for (i in seq_along(covars)){
     covar <- covars[[i]]
 
-    prepped[[i]] <- Pcov_prepare(covar, W, dimyx, fractional)
+    prepped[[i]] <- Pcov_prepare(covar,  dimyx)
 
   }
 
-  new_rcrd(list(pcov = prepped),
+  vctrs::new_rcrd(list(pcov = prepped),
            class = c('Pcov', 'spatial_covariate'))
 }
 
+#' @export
 format.Pcov <- function(object, ...){
-  rep('Pcov', vec_size(object))
+  rep('Pcov', vctrs::vec_size(object))
 }
 
-Pcov_prepare <- function(object, W, dimyx, fractional){
+#' @export
+Pcov_prepare <- function(object,  dimyx, fractional){
   UseMethod('Pcov_prepare')
 }
 
 ## Pcov should be evaluable when provided with a parametrically chosen kernel
+#' @export
 evaluate.Pcov <- function(object, locations, kernel, ...){
 
   evaluate_single <- function(p, kernel, locations){
     conved <- fft(fft(kernel(p$distances)) * p$covariate, inverse = TRUE) / prod(p$dims)
-    pim <- as.im(Re(matrix(conved[1:p$dims[[1]], 1:p$dims[[2]]])), W = p$window, dimyx = p$dimyx)
+    pim <- spastat.geom::as.im(Re(matrix(conved[1:p$dims[[1]], 1:p$dims[[2]]])), W = p$window, dimyx = p$dimyx)
     interp.im(pim, coordx(locations), coordy(locations))
   }
 
@@ -257,7 +333,7 @@ evaluate.Pcov <- function(object, locations, kernel, ...){
   reduce(pred, c)
 }
 
-
+#' @export
 setup <- function(object, locations, ...){
   UseMethod('setup')
 }
@@ -265,17 +341,25 @@ setup <- function(object, locations, ...){
 ## setup should provide a method to construct the pseudodata necessary for non-parametric basis setup
 ## currently only working for the single covariate case
 ## this needs to be reworked by rewriting placeholders to use vctrs
+
+#' @export
 setup.Pcov <- function(object, locations){
   covariate_placeholder(
     object,
     cbind(coordx(locations), coordy(locations)))
 }
 
-Pcov_prepare.ppp <- function(object, W, dimyx, fractional){
-  conv_prepare(object, W, dimyx, fractional, normalize = TRUE)
+#' @export
+Pcov_prepare.ppp <- function(object, dimyx){
+  conv_prepare(object, dimyx = dimyx)
 }
 
+#' @export
+Pcov_prepare.list <- function(object, dimyx){
+    map(object, \(ob) conv_prepare(ob, dimyx))
+}
 
+#' @export
 Pcov_prepare.default <- function(object, ...){
   cl <- class(object)[[1]]
   message <- paste0('Objects of type ', cl, ' not currently supported.')
@@ -290,24 +374,29 @@ Pcov_prepare.default <- function(object, ...){
 
 
 ## convert to Fcov
+#' @export
 as_Fcov <- function(object, ...){
   UseMethod('as_Fcov')
 }
 
+#' @export
 as_Fcov.Fcov <- function(object, ...){
   object
 }
 
+#' @export
 as.im.Fcov <- function(object, W) {
   as.im(function(x,y) evaluate(object, coord(x,y)), W = W)
 }
+
+#' @export
 as_Fcov.Pcov <- function(object, kernel, ...){
   force(kernel)
   f <- function(x,y) evaluate(object, locations = coord(x,y), kernel = kernel)
   Fcov(f)
 }
 
-
+#' @export
 as_Fcov.Lcov <- function(object, kernel, ...){
   force(kernel)
   f <- function(x,y) evaluate(object, locations = coord(x,y), kernel = kernel)
@@ -320,18 +409,20 @@ as_Fcov.Lcov <- function(object, kernel, ...){
 ## Fcov is similar in spirit to Rcov, but handles data via a functional representation
 ## this may be under some circumstances more amenable to handling uncertainty due to measurement error
 ## Fcov requires a basis or model for the representation of the data
+
+#' @export
 Fcov <- function(..., formula, method, family){
   object <- list2(...)
   fitted <- lapply(object, function(ob) Fcov_prepare(ob, ...))
 
-  new_rcrd(list(fitted = fitted), class = c('Fcov', 'spatial_covariate'))
+  vctrs::new_rcrd(list(fitted = fitted), class = c('Fcov', 'spatial_covariate'))
 }
-
+#' @export
 format.Fcov <- function(ob, ...){
   rep('Fcov', vec_size(ob))
 }
 
-
+#' @export
 `+.Fcov` <- function(ob, ob2) {
   if (inherits(ob2, 'numeric')) {
     result <- map2(field(ob, 'fitted'),
@@ -349,7 +440,7 @@ format.Fcov <- function(ob, ...){
   stop('Not implemented')
 }
 
-
+#' @export
 `*.Fcov` <- function(ob, ob2) {
   if (inherits(ob2, 'numeric')) {
     result <- map2(field(ob, 'fitted'),
@@ -366,7 +457,7 @@ format.Fcov <- function(ob, ...){
   }
   stop('Not implemented')
 }
-
+#' @export
 `-.Fcov` <- function(ob, ob2) {
   if (inherits(ob2, 'numeric')) {
     result <- map2(field(ob, 'fitted'),
@@ -383,7 +474,7 @@ format.Fcov <- function(ob, ...){
   }
   stop('Not implemented')
 }
-
+#' @export
 `/.Fcov` <- function(ob, ob2) {
   if (inherits(ob2, 'numeric')) {
     result <- map2(field(ob, 'fitted'),
@@ -403,7 +494,7 @@ format.Fcov <- function(ob, ...){
 
 
 
-
+#' @export
 evaluate.Fcov <- function(ob, locations){
   x <- coordx(locations)
   y <- coordy(locations)
@@ -413,11 +504,11 @@ evaluate.Fcov <- function(ob, locations){
 
 setup.Fcov <- evaluate.Fcov
 
-
+#' @export
 Fcov_prepare <- function(object, ...){
   UseMethod('Fcov_prepare')
 }
-
+#' @export
 Fcov_prepare.function <- function(object, ...) {
   stopifnot(names(formals(object)) == c('x', 'y'))
   object
@@ -428,10 +519,11 @@ Fcov_prepare.function <- function(object, ...) {
 ## it should also be able to make pooling decisions using random subsets of the pooled data (for representativeness while also reducing computation costs).
 ## Alternatively it should be able to select bases for each model individually
 ## A final alternative is to use a specified portion of the data to make a single global basis selection
-
+#' @export
 Fcov_prepare.data.frame <- function(data, formula, method, family){
   method(formula, family = family, data = data)
 }
+#' @export
 basis_select <- function(...){
 
 }
@@ -498,44 +590,96 @@ format.Ecov <- function(ob, ...){
 ## The attributes contain angle orientation and distance matrices for setup of the convolutional basis. It also contains the precomputed fft of the
 ## pixellated version of the process
 ## additional attributes include the oservation window of the process and the dimensions of the process
+#' @export
+Lcov <- function(..., dimyx = c(128, 128)){
 
-Lcov <- function(..., W = NULL, dimyx = c(128, 128)){
+  
   covars <- rlang::list2(...)
 
   for (i in seq_along(covars)){
     covar <- covars[i]
 
-    covar[[i]] <- Lcov_prepare(covar[[i]], W, dimyx, fractional)
+    covar[[i]] <- Lcov_prepare(covar[[i]], W, dimyx)
   }
 
-  new_rcrd(list(pcov = covars),
+  vctrs::new_rcrd(list(pcov = covars),
            class = c('Lcov', 'spatial_covariate'))
 }
 
 ## Lcov should be evaluable when provided with a parametrically chosen kernel
+#' @export
 evaluate.Lcov <- function(object, locations, kernel, ...){
 
 }
 
-
+#' @export
 format.Lcov <- function(object, ...){
   rep('Lcov', vec_size(object))
 }
 
-
+#' @export
 Lcov_prepare.default <- function(object, ...){
   cl <- class(object)[[1]]
   message <- paste0('Objects of type ', cl, ' not currently supported.')
   stop(message)
 }
 
-
-Lcov_prepare <- function(object, W, dimyx, fractional){
+#' @export
+Lcov_prepare <- function(object, W, dimyx){
   UseMethod('Lcov_prepare')
 }
 
 
+#' @export
+Lcov_prepare.linnet <- function(object, W, dimyx){
+  conv_prepare(object, dimyx)
+}
 
-Lcov_prepare.linnet <- function(object, W, dimyx, fractional){
-  conv_prepare(object, W, dimyx, fractional, normalize = FALSE)
+#' @export
+as_Lcov.im <- function(immat) {
+    dimyx <- immat$dim
+    ## establish coordinates of convolution raster
+    ## the convolution raster extends out twice past the window in order to prevent circular convolution
+    xcoords <- seq(from = immat$xrange[[1]], to = 2 * immat$xrange[[2]], length.out = 2 * dimyx[[1]])
+    ycoords <- seq(from = immat$yrange[[1]], to = 2 * immat$yrange[[2]], length.out = 2 * dimyx[[2]])
+
+
+    ## construct matrix, zero pad, and then perform fft
+    for_conv <- matrix(0, nrow = dimyx[[1]] * 2, ncol = dimyx[[2]] * 2)
+    for_conv[1:dimyx[[1]], 1:dimyx[[2]]] <- immat$v
+    for_conv <- fft(for_conv)
+
+
+    ## fft2shift is used after each to prevent phase issues down the line
+    ## performing the fft shift during construction guarantees correctness of convolutions later without requiring complex tracking of indices
+    ## setup distances matrix
+    dists <- outer(xcoords - median(xcoords),
+                   ycoords - median(ycoords),
+                   \(x,y) sqrt(x^2 + y^2))
+
+
+    half_dists <- seq(from = 0, to = max(dists), length.out = ceiling(dim(dists)[[1]]/2))
+
+    dists <- fft2shift(dists)
+    ## setup angle orientation matrix
+    angle <- outer(xcoords - median(xcoords),
+                   ycoords - median(ycoords),
+                   atan2)
+    angle <- fft2shift(angle)
+
+    window <- owin(immat$xrange, immat$yrange)
+
+   out <- list(covariate = for_conv,
+         half_dists = half_dists,
+         window = window,
+         dims = dimyx,
+         distances = dists,
+         angle = angle,
+         unique_dists = unique(dists)
+         )
+
+
+    out <- vctrs::new_rcrd(list(pcov = list(out)),
+                    class = c('Lcov', 'spatial_covariate'))
+    out
 }

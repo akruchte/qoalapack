@@ -1,3 +1,4 @@
+if(FALSE){
 library(tidyverse)
 library(tigris)
 library(sf)
@@ -25,3 +26,4 @@ tracts <- select(tracts)
 region_tracts <- st_intersection(tracts, major_regions)
 
 region_tracts |> select(id) |> write_rds('allegheny_region_tracts.rds')
+}
