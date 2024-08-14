@@ -1,9 +1,3 @@
-## source('covariate_types.R')
-## source('utilities.R')
-## examples for documentation
-
-
-
 ## crude temporary implementation of outcome model
 ## takes in a fitted model and provides a simple wrapper for calculating
 ## quantities needed for estimation
