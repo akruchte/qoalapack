@@ -1,17 +1,3 @@
-
-## s <- swedishpines
-
-
-## mod <- ppm(s ~ x + y)
-
-## mod2 <- ppm(s ~ x + y, interaction = Strauss(0.2))
-## evalInteraction(s, s, interaction = AreaInter(0.1), correction = 'none')
-
-## locs <- coords(s)
-
-
-
-#' @export
 bump <- function(d) if_else(d < 1,  exp(-1/(1 - d^2)), 0)
 
 ## bump shift initially only supported for circular regions

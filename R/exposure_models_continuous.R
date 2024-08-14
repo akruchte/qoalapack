@@ -1,4 +1,3 @@
-
 ## numerator model is used for stabilization weights
 ## it takes in an exposure model as an argument and fits
 ## the model required for propensity score stabilization
@@ -27,6 +26,8 @@ exposure_model <- function(formula, data, family, method = 'gam', ..., numerator
 
     mod_fit
 }
+
+
 
 select_engine <- function(method) {
     switch(method,
