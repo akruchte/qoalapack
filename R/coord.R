@@ -2,14 +2,12 @@
 
 #' 2d coordinates object
 #' @export
-#'
 coord <- function(x = double(), y = double()){
     vec_assert(x, ptype = double())
     vec_assert(y, ptype = double())
 
     new_rcrd(list(x = x, y = y), class = 'coord')
 }
-
 
 #' @export
 vec_ptype_abbr.coord <- function(x, ...){
@@ -56,12 +54,12 @@ coordy <- function(ob){
 
 #' @export
 Norm <- function(ob, ...) {
-    UseMethod(ob, ...)
+    UseMethod('Norm')
 }
 
 #' @export
 Norm2 <- function(ob, ...) {
-    UseMethod(ob, ...)
+    UseMethod('Norm2')
 }
 
 #' @export

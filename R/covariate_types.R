@@ -279,8 +279,6 @@ conv_prepare <- function(object, dimyx){
 
 
 #' Pcov
-
-
 #' Pcov is meant for point process valued data,
 #' an object of type 'ppp' or sf POINT objects can be handled as data input
 

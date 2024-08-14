@@ -8,9 +8,6 @@ dynadouble  <- function(init_values) {
 
 
 
-
-class(f) <- 'fun'
-
 `+.fun`<- function(x,y){function(z) x(z) + y(z)}
 
 
