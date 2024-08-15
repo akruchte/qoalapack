@@ -10,6 +10,8 @@ outcome_model <- function(model, prediction_locations) {
 ## returns a function f(i) for treatment A indexed by i.
 ## f evaluates the predicted intensity at each of the originally specified locations when assigned a treatment value of A
 ## expects that the model have treatment provided as the first term
+
+
 #' @export
 outcome_fun <- function(omodel, prediction_locations){
     if(missing(prediction_locations)) stop('Prediction dataset required')
