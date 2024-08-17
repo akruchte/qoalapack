@@ -1,0 +1,1 @@
+## Tesselation type covariates

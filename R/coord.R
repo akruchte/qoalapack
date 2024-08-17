@@ -4,13 +4,22 @@
 #' @param x a number
 #' @param y a number
 #' @return a coordinate representation
-#'' @export
-coord <- function(x = double(), y = double()){
-    vec_assert(x, ptype = double())
-    vec_assert(y, ptype = double())
-
+#' @export
+coord <- function(x, y) {
+    if (missing(y)){
+        stopifnot( matrixlike(x) & ncol(x) >= 2)
+        y <- x[,2]
+        x <- x[,1]
+    }
+        
+    
     new_rcrd(list(x = x, y = y), class = 'coord')
 }
+
+matrixlike <- function(ob){
+    is.data.frame(ob) | is.matrix(ob) | is.array(ob)
+}
+    
 
 
 #' label_coord

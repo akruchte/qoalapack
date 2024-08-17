@@ -1,1 +1,2 @@
 * TODO convert placeholder rcrd to vctr
+* TODO Correct formatting printing in coord.R

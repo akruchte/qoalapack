@@ -1,3 +1,15 @@
+#' Model Context
+#'
+#' Model context is an R6 class for capturing intermediate results of running mgcv functions, and not repeating them unnecessarily.
+#' @export
+model_context <- R6Class('model_context',
+                         public = list(
+                             context = NA,
+                             set_context = function(new_context) self$context <- new_context))
+
+
+model_configuration <- R6Class('model_configuration', list())
+
 ## crude temporary implementation of outcome model
 ## takes in a fitted model and provides a simple wrapper for calculating
 ## quantities needed for estimation
@@ -228,7 +240,6 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 update_exposure <- function(model, new_exposure) {
 
     newdata <- model$gam_data
-
     ## data checks
     stopifnot(is.list(new_exposure))
     if(any(is.null(names(new_exposure)))) stop('New exposures must have names')
@@ -289,89 +300,101 @@ update_exposure <- function(model, new_exposure) {
 ## The levels are included directly in the data
 ## actual coordinates and pcov data is encoded internally in attributes
 
+
 #' @export
 smooth.construct.conv.smooth.spec <- function(object, data, knots) {
-    
+
+    ## TODO
+    ## this should just be a standard Pcov
     conv_data <- purrr::reduce(extract_data(data[[object$term]]), c)
-    coords <- extract_coords(data[[object$term]])
+    
+    coords <- data[[object$term]]
 
     extra <- object$xt
+    ctxt <- extra$context
+
     max_dist_prop <- extra$max_dist_prop
 
-
-    ## this should probably be removed
+    
+        ## this should probably be removed
     if (is.null(max_dist_prop)) max_dist_prop <- 0.25
 
-
-    term <- object$term
-
-    ## if no secondary basis is provided default to b-splines
-    basis_term <- 'bs'
-    if (length(class(object)) > 1) {
-        ## TODO restrict to specific eligible options
-        basis_term <- str_extract(class(object)[[2]], '[a-zA-Z]+')
-    } else {basis_term <- 'bs'}
-    
-
-    intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim)
-    intern_call$label <- paste0('conv(', term, ')')
-    
-    ## local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances)))
-    ## TODO     make user configurable and provide better defaults
-    distances <- seq(from = 0, to = max_dist_prop * max(unique(c(field(reduce(conv_data, c), 'pcov')[[1]]$distances))), length.out = 1000)
-    neg_buf <- -rev(distances[2:10])
-    local_data <- list(distances = c(neg_buf, distances))
-
-    ## internal basis construction including penalty
-    basis <- smooth.construct(intern_call, data = local_data, knots = knots)
-    basis$og_data <- local_data
-
-
-    ## I don't think this is necessary?
-    pred_dat <- list(distances = reduce(map(field(reduce(conv_data, c), 'pcov'), 'distances'), c))
-
-
-    basis$internal_basis <- basis
-    basis$term <- object$term
-
-    ## then in this step apply this to each marked set seperately
-    ## in that way everything is now pooled
-
-    local_conv <- function(to_conv, pcovar, coords) {
-        covar <- pcovar$covariate
-        dims <- pcovar$dims
-        window <- pcovar$window
-        convolve_basis(to_conv, covar, dims, window, coords)
+    if (!is.null(ctxt)) {
+        initial <- is.na(ctxt$context)
     }
-    
-    bases <- vector(mode = 'list', length = length(conv_data))
-    
-    for (i in seq_along(bases)){
-        lcd <- field(conv_data, 'pcov')[[i]]
-        pred_dat <- list(distances = lcd$distances)
-        Xloc <- Predict.matrix(basis$internal_basis, data = pred_dat)
-        Xout <- 0 * Xloc
+    if (initial) {
 
-        ncols <- ncol(Xloc)
-        interp_basis <- vector(mode = 'list', length = ncols)
+        term <- object$term
+
+        ## if no secondary basis is provided default to b-splines
+        basis_term <- 'bs'
+        if (length(class(object)) > 1) {
+            ## TODO restrict to specific eligible options
+            basis_term <- str_extract(class(object)[[2]], '[a-zA-Z]+')
+        } else {basis_term <- 'bs'}
         
-        for(col in 1:ncols) {
-            lc <- local_conv(Xloc[,col], lcd)
 
-            interp_basis[[col]] <- lc
+        ## turn into convolution internal basis function
+        intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim)
+        intern_call$label <- paste0('conv(', term, ')')
+        
+        ## local_data <- list(distances = unique(c(field(conv_data, 'pcov')[[1]]$distances)))
+        ## TODO     make user configurable and provide better defaults
+        distances <- seq(from = 0, to = max_dist_prop * max(unique(c(field(reduce(conv_data, c), 'pcov')[[1]]$distances))), length.out = 1000)
+        neg_buf <- -rev(distances[2:10])
+        local_data <- list(distances = c(neg_buf, distances))
+
+        ## internal basis construction including penalty
+        basis <- smooth.construct(intern_call, data = local_data, knots = knots)
+        basis$og_data <- local_data
+
+
+        ## I don't think this is necessary?
+        pred_dat <- list(distances = reduce(map(field(reduce(conv_data, c), 'pcov'), 'distances'), c))
+
+
+        basis$internal_basis <- basis
+        basis$term <- object$term
+
+        ## then in this step apply this to each marked set seperately
+        ## in that way everything is now pooled
+
+        local_conv <- function(to_conv, pcovar, coords) {
+            covar <- pcovar$covariate
+            dims <- pcovar$dims
+            window <- pcovar$window
+            convolve_basis(to_conv, covar, dims, window, coords)
         }
-        bases[[i]] <- interp_basis
         
+        bases <- vector(mode = 'list', length = length(conv_data))
+        
+        for (i in seq_along(bases)){
+            lcd <- field(conv_data, 'pcov')[[i]]
+            pred_dat <- list(distances = lcd$distances)
+            Xloc <- Predict.matrix(basis$internal_basis, data = pred_dat)
+            Xout <- 0 * Xloc
+
+            ncols <- ncol(Xloc)
+            interp_basis <- vector(mode = 'list', length = ncols)
+            
+            for(col in 1:ncols) {
+                lc <- local_conv(Xloc[,col], lcd)
+
+                interp_basis[[col]] <- lc
+            }
+            bases[[i]] <- interp_basis
+            
+        }
+
+        ## then in this step apply this to each marked set seperately
+        ## in that way everything is now pooled
+        basis$interpolation_basis <- bases
+        class(basis) <- 'Convspline.smooth'
+        basis$X <- Predict.matrix.Convspline.smooth(basis, data)
+
+        return(basis)
+
     }
-
-    ## then in this step apply this to each marked set seperately
-    ## in that way everything is now pooled
-    basis$interpolation_basis <- bases
-    class(basis) <- 'Convspline.smooth'
-    basis$X <- Predict.matrix.Convspline.smooth(basis, data)
-
-    return(basis)
-
 }
 
 #' @export
@@ -636,5 +659,14 @@ Predict.matrix.Bspline2.smooth <- function(object,data) {
 #' @export
 sgam <- function(formula, data, conv_control ) {
     
+    
+}
+
+## given a certain parametric model use a spline based model to test correctness of the specification
+## update the parametric model in one direction or another on the basis of this test
+
+## Once we have a correctly specified test according to the spline approximation we can then revise the spline model to look at max distance specifications or whatnot
+
+spline_spec_test <- function ( ) {
     
 }
