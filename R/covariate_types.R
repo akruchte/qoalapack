@@ -1,5 +1,3 @@
-## covariate representations should have methods that make them easily coercible for representation in modeling
-## specifically, there should be a method for evaluating the covariate representation at the points of a quadrature scheme
 
 #' @exportS3Method
 format.spatial_covariate <- function(object, ...){
@@ -72,7 +70,7 @@ covariate_placeholder <- function(coords, data, ...) {
     pdata <- prepare_placeholder_data(data, ...)
     
     structure(
-        coords,
+        coord(coords),
         class = c('covariate_placeholder', class(coords)),
         meta = list(),
         data = pdata$data,

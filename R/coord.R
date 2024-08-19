@@ -7,7 +7,11 @@
 #' @export
 coord <- function(x, y) {
     if (missing(y)){
+        
+        if (is_coord(x)) return(x)
+        
         stopifnot( matrixlike(x) & ncol(x) >= 2)
+        
         y <- x[,2]
         x <- x[,1]
     }

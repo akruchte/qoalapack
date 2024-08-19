@@ -235,6 +235,8 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 }
 
 
+
+
 ## TODO
 #' @export
 update_exposure <- function(model, new_exposure) {
@@ -536,52 +538,69 @@ convolve_basis <- function(basis, for_conv, dims, window, coords){
 
 
 
+## initialization code taken from mgcv
+mgcv_initialize <- function (object, data, knots) {
+
+    ## a B-spline constructor method function
+  ## get orders: m[1] is spline order, 3 is cubic. m[2] is order of derivative in penalty.
+
+      if (length(object$p.order)==1) m <- c(object$p.order,max(0,object$p.order-1)) 
+      else m <- object$p.order  # m[1] - basis order, m[2] - penalty order
+
+
+    ## set defaults on m and dim
+    if (is.na(m[1])) if (is.na(m[2])) m <- c(3,2) else m[1] <- m[2] + 1
+    if (is.na(m[2])) m[2] <- max(0,m[1]-1)
+    object$m <- object$p.order <- m
+    if (object$bs.dim<0) object$bs.dim <- max(10,m[1]) ## default
+
+
+    ## knots logic 
+    nk <- object$bs.dim - m[1] + 1  # number of interior knots
+    if (nk<=0) stop("basis dimension too small for b-spline order")
+    if (length(object$term)!=1) stop("Basis only handles 1D smooths")
+    x <- data[[object$term]]    # find the data
+    k <- knots[[object$term]]
+    if (is.null(k))
+    {
+        xl <- min(x);xu <- max(x)
+    }
+    else if (length(k)==2)
+    { 
+        xl <- min(k);xu <- max(k);
+        if (xl>min(x)||xu<max(x)) stop("knot range does not include data")
+    }
+      
+      if (!is.null(k)&&length(k)==4&&length(k)<nk+2*m[1]) {
+          ## 4 knots supplied: lower prediction limit, lower data limit,
+          ##   upper data limit, upper prediction limit
+          k <- sort(k)
+          dx <- (k[4]-k[1])/(nk-1)
+          ko <- c(k[1]-dx*m[1],k[4]+dx*m[1]) ## limits for outer knots
+          k <- c(seq(ko[1],k[1],length=m[1]+1),
+                 seq(k[2],k[3],length=max(0,nk-2)),
+                 seq(k[4],ko[2],length=m[1]+1))
+          
+      } else if (is.null(k)||length(k)==2) {
+          xr <- xu - xl # data limits and range
+          xl <- xl-xr*0.001;xu <- xu+xr*0.001;dx <- (xu-xl)/(nk-1) 
+          k <- seq(xl-dx*m[1],xu+dx*m[1],length=nk+2*m[1])   
+      } else {
+          if (length(k)!=nk+2*m[1]) 
+              stop(paste("there should be ",nk+2*m[1]," supplied knots"))
+      }
+      if (is.null(object$deriv)) object$deriv <- 0 
+      object$X <- splines::spline.des(k,x,m[1]+1,x*0+object$deriv, outer.ok = TRUE)$design # get model matrix
+      if (!is.null(k)) {
+          if (sum(colSums(object$X)==0)>0) warning("there is *no* information about some basis coefficients")
+      }  
+      if (length(unique(x)) < object$bs.dim) warning("basis dimension is larger than number of unique covariates")
+
+}
 ## modified from mgcv
 #' @export
+
 smooth.construct.bs2.smooth.spec <- function(object,data,knots) {
-## a B-spline constructor method function
-  ## get orders: m[1] is spline order, 3 is cubic. m[2] is order of derivative in penalty.
-  if (length(object$p.order)==1) m <- c(object$p.order,max(0,object$p.order-1)) 
-  else m <- object$p.order  # m[1] - basis order, m[2] - penalty order
-  if (is.na(m[1])) if (is.na(m[2])) m <- c(3,2) else m[1] <- m[2] + 1
-  if (is.na(m[2])) m[2] <- max(0,m[1]-1)
-  object$m <- object$p.order <- m
-  if (object$bs.dim<0) object$bs.dim <- max(10,m[1]) ## default
-  nk <- object$bs.dim - m[1] + 1  # number of interior knots
-  if (nk<=0) stop("basis dimension too small for b-spline order")
-  if (length(object$term)!=1) stop("Basis only handles 1D smooths")
-  x <- data[[object$term]]    # find the data
-  k <- knots[[object$term]]
-  if (is.null(k)) { xl <- min(x);xu <- max(x) } else
-  if (length(k)==2) { 
-    xl <- min(k);xu <- max(k);
-    if (xl>min(x)||xu<max(x)) stop("knot range does not include data")
-  }
-    
-  if (!is.null(k)&&length(k)==4&&length(k)<nk+2*m[1]) {
-    ## 4 knots supplied: lower prediction limit, lower data limit,
-    ##   upper data limit, upper prediction limit
-    k <- sort(k)
-    dx <- (k[4]-k[1])/(nk-1)
-    ko <- c(k[1]-dx*m[1],k[4]+dx*m[1]) ## limits for outer knots
-    k <- c(seq(ko[1],k[1],length=m[1]+1),
-       seq(k[2],k[3],length=max(0,nk-2)),
-       seq(k[4],ko[2],length=m[1]+1))
-    
-  } else if (is.null(k)||length(k)==2) {
-    xr <- xu - xl # data limits and range
-    xl <- xl-xr*0.001;xu <- xu+xr*0.001;dx <- (xu-xl)/(nk-1) 
-    k <- seq(xl-dx*m[1],xu+dx*m[1],length=nk+2*m[1])   
-  } else {
-    if (length(k)!=nk+2*m[1]) 
-    stop(paste("there should be ",nk+2*m[1]," supplied knots"))
-  }
-  if (is.null(object$deriv)) object$deriv <- 0 
-  object$X <- splines::spline.des(k,x,m[1]+1,x*0+object$deriv, outer.ok = TRUE)$design # get model matrix
-  if (!is.null(k)) {
-    if (sum(colSums(object$X)==0)>0) warning("there is *no* information about some basis coefficients")
-  }  
-  if (length(unique(x)) < object$bs.dim) warning("basis dimension is larger than number of unique covariates")
  
   ## now construct derivative based penalty. Order of derivate
   ## is equal to m, which is only a conventional spline in the 
@@ -654,13 +673,17 @@ Predict.matrix.Bspline2.smooth <- function(object,data) {
 }
 
 
-
-
+#' sgam is a thin wrapper around gam that provides revision capabilities. 
+## 
 #' @export
-sgam <- function(formula, data, conv_control ) {
-    
-    
+sgam <- function(formula, data, conv_control, ... ) {
+    fit <- gam(formula, data, conv_control, ...)
+    class(fit) <- c('sgam', class(fit))
 }
+
+
+
+
 
 ## given a certain parametric model use a spline based model to test correctness of the specification
 ## update the parametric model in one direction or another on the basis of this test
