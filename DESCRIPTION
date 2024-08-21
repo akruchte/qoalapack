@@ -18,7 +18,8 @@ Imports:
     spatstat.random,
     spatstat.geom,
     pracma,
-    R6
+    R6,
+    SobolSequence
 LinkingTo:
     Rcpp,
     cpp11

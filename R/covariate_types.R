@@ -66,7 +66,14 @@ as.im.spatial_covariate <- function(cov, W, ...){
 #' @param coords A vector of coordinates
 #' @param data Additional spatial data indexed by coords
 #'  @export
-covariate_placeholder <- function(coords, data, ...) {
+covariate_placeholder <- function(data, coords,  ...) {
+
+    if (missing(coords)) {
+        message("Initializing placeholder covariate at default values\n")
+        coords <- default_points()
+    }
+    coords <- coord(coords)
+    
     pdata <- prepare_placeholder_data(data, ...)
     
     structure(
