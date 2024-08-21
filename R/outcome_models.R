@@ -248,6 +248,7 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 #' This function carries out the logic of convolving, and restructuring the data
 #' @export
 convolve_basis <- function(basis, pp_covariate) {
+
     dims <- pp_covariate$dims
     window <- pp_covariate$window
 
