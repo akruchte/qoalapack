@@ -1,10 +1,3 @@
-## todo
-## Move interpolation logic into Rcov
-## fix update logic
-
-## write some tests
-
-
 #' Model Context
 #'
 #' Model context is an R6 class for capturing intermediate results of running mgcv functions, and not repeating them unnecessarily.
@@ -277,7 +270,38 @@ extract_basis_from_spec <- function(smooth_spec) {
 }
 
 
+
 construct_conv_internal_basis <- function (object, data, knots ) {
+    ## TODO penalty order logic
+    n_right_boundary_knots <- 2L
+    n_left_boundary_knots <- 2L
+    
+    ## left boundary knots go negative
+    ## right boundary knots lead to hard cut off at desired value
+    
+    nknots <- object$bs.dim
+    if(nknots < 0) {
+        nknots <- 10
+        bs.dim <- 10
+    }
+    
+    extra <- object$xt
+    max_dist <- extra$max_distance
+
+    if(is.null(max_dist)) {
+        max_dist_prop <- extra$max_distance_proportion
+        ## TODO fix magic number default
+        if(is.null(max_dist_prop)) max_dist_prop = 0.25
+
+        max_dist <- max_dist_prop * get_max_distance(data)
+    }
+
+    lknots <- seq(from = 0, to = max_dist, length.out = (nknots + n_left_boundary_knots))
+    interval <- lknots[2] - lknots[1] 
+    lknots <- c(-2 * interval, -1 * interval, lknots)
+
+    if(is.null(knots)) knots <- list()
+    knots[["distances"]] <- lknots
 
     basis_term <- extract_basis_from_spec(object)[-1]
     if (is_empty(basis_term)) basis_term <- 'bs2'
@@ -285,11 +309,11 @@ construct_conv_internal_basis <- function (object, data, knots ) {
     intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim, xt = object$xt)
     intern_call$label <- paste0('conv(', basis_term, ')')
 
-    max_dist_prop = 0.25
-    distances <- seq(from = 0, to = max_dist_prop * get_max_distance(data), length.out = 1000)
-
     ## internal basis construction including penalty
-    basis <- smooth.construct(intern_call, data = list(distances = distances), knots = knots)
+    ## penalty calculated internally
+    local_data <- seq(from = 0, to = get_max_distance(data), length.out = 1000L)
+    
+    basis <- smooth.construct(intern_call, data = list(distances = local_data), knots = knots)
 
     basis$internal_basis <- basis
     basis$term <- object$term
@@ -297,14 +321,13 @@ construct_conv_internal_basis <- function (object, data, knots ) {
 }
 
 
-#' @export
+#' @exportS3Method
 smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     ## TODO
     ## this should just be a standard Pcov
     term <- object$term
     coords <- data[[object$term]]
     conv_data <- extract_data(coords)
-
     
     extra <- object$xt
     ctxt <- extra$context
@@ -316,26 +339,31 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     basis <- construct_conv_internal_basis(object, conv_data, knots)
     bases <- vector(mode = 'list', length = length(conv_data))    
 
+
     for (i in seq_along(bases)){
         current_pp <- conv_data[[i]]
 
         pred_dat <- list(distances = current_pp$distances)
+        
+        ## TODO uniquely at each distance
         distance_design <- Predict.matrix(basis$internal_basis, data = pred_dat)
         ## preallocate output design
         convolutional_design <- distance_design * 0L
 
+
         ncols <- ncol(convolutional_design)
         interp_basis <- vector(mode = 'list', length = ncols)
+
         for(basis_index in 1:ncols)
         {
             to_conv <- distance_design[,basis_index]
-
             lc <- convolve_basis ( to_conv, current_pp)
-
             interp_basis[[basis_index]] <- lc
         }
         bases[[i]] <- interp_basis
     }
+
+    e <<- environment()
 
     ## then in this step apply this to each marked set seperately
     ## in that way everything is now pooled
@@ -351,9 +379,6 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 ## adaptive convolutions use a three dimensional convolution
 ## and then add an additional adaptive surface penalty
 
-
-
-
 ## required mgcv function
 
 #' @export
@@ -366,8 +391,6 @@ Predict.matrix.Convspline.smooth <- function(object, data) {
     nr <- ncoord * length(interp_basis)
     ## assumes all bases have same dimension which they certainly should
     nc <- length(interp_basis[[1]])
-
-
     Xmat <- matrix(0, nrow = nr, ncol = nc)
 
     for (i in 1:length(interp_basis)){

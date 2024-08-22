@@ -51,7 +51,7 @@ pcov_prepare <- function(object,  ...){
 
 #' @exportS3Method
 pcov_prepare.list <- function(object, ...){
-    lapply(object, \(ob) prepare(ob, ...))
+    lapply(object, \(ob) pcov_prepare(ob, ...))
 }
 
 
@@ -132,6 +132,13 @@ conv_prepare <- function(object, dimyx, W){
          )
 }
 
+get_unique_distances <- function(ob) {
+    stopifnot(inherits(ob, 'Pcov'))
+    ## TODO update this, currently only correct for a single Pcov
+    unique_combined <- unique(do.call(c, lapply(ob, \(lob) lob$unique_dists)))
+
+    unique_combined
+}
  
 get_max_distance <- function(ob) {
     stopifnot(inherits(ob, 'Pcov'))

@@ -53,8 +53,8 @@ evaluate.Rcov <- function(object, locations, ...){
     y <- coordy(locations)
 
     interpolator <- switch(attr(object, 'interpolator'),
-                           'bilin' = function(r) interp.im(r, x,y, bilinear = TRUE),
-                           'spatstat' = function(r) interp.im(r, x,y, bilinear = FALSE))
+                           'bilin' = function(r) spatstat.geom::interp.im(r, x,y, bilinear = TRUE),
+                           'spatstat' = function(r) spatstat.geom::interp.im(r, x,y, bilinear = FALSE))
 
     do.call(c, lapply(object, interpolator))
 }

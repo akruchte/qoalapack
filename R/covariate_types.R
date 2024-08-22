@@ -1,12 +1,4 @@
 
-#' @exportS3Method
-format.spatial_covariate <- function(object, ...){
-    type <- class(object)[[1]]
-    rep(type, vctrs::vec_size(object))
-}
-
-
-strip_meta <- c
 
 #' @export 
 evokeable <- function(data) {
@@ -18,39 +10,6 @@ evokeable <- function(data) {
 evaluate <- function(object, ...){
  UseMethod('evaluate')
 }
-
-
-#' @export
-evaluate.spatial_covariate <- function(object, ...){
-    stop('Evaluate method not implemented')
-}
-## @param ... <[`dynamic-dots`][rlang::dyn-dots]> What these dots do.
-
-
-placeholder_recycle <- function(object, target) {
-
-}
-
-
-#' @export
-plot.spatial_covariate <- function(cov, W, ...){
-    plot(spatstat.geom::as.im(function(x,y) evaluate(cov, coord(x,y), ...), W))
-}
-
-#' @export
-as.im.spatial_covariate <- function(cov, W, ...){
-        spatstat.geom::as.im(as_Fcov(function(x,y) evaluate(cov, coord(x,y), ...), W))
-}
-
-## @param ... <[`dynamic-dots`][rlang::dyn-dots]> What these dots do.
-
-
-#' covariate placeholders should carry the relevant information regarding
-#' the appropriate single level entity  information needed in model fitting (such as mgcv::gam)
-#'  cases include an age, sex, geo-coordinate (x,y), or possibly higher order coordinates, (x,y,t, w) for extra w
-
-
-
 #' Covariate Placeholder
 #'
 #' A covariate placeholder type is a vector of coordinates (or other 'lookup' type)
@@ -69,8 +28,9 @@ as.im.spatial_covariate <- function(cov, W, ...){
 covariate_placeholder <- function(data, coords,  ...) {
 
     if (missing(coords)) {
+        stop("default coords not implemented")
         message("Initializing placeholder covariate at default values\n")
-        coords <- default_points()
+        coords <- default_points(extent(data))
     }
     coords <- coord(coords)
     

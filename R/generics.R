@@ -1,3 +1,4 @@
+#' @importFrom spatstat.geom as.im
 ## include generics
 
 
