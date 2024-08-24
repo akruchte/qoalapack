@@ -69,6 +69,7 @@ vec_ptype_abbr.Rcov <- function(r, ...){
     'Rcov'
 }
 
+
 #' @export
 Rcov_prepare <- function(object, ...) {
     UseMethod('Rcov_prepare')

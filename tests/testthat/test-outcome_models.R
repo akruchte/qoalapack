@@ -20,7 +20,7 @@ test_that("Smooth construction",
 
 test_that("Smooth distance cutoff",
 {
-    object <- s(covar, bs = 'conv', k = 17)
+    object <- s(covar, bs = 'conv', k = 17, xt = list(max_dist_prop = 0.05 ))
     pcovar <- covariate_placeholder(covar, test_points)
     data <- list(covar = pcovar)
     smooth <- smooth.construct(object = object, data = data, knots = knots)

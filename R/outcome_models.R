@@ -242,14 +242,30 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 #' @export
 convolve_basis <- function(basis, pp_covariate) {
 
+    resolution <- pp_covariate$dims
+
+    covar_ix <- 1:resolution[1]
+    covar_iy <- 1:resolution[2]
+
+    basis_ix <- 1:resolution[1]
+    basis_iy <- 1:resolution[2]
+    
+    out_ix <- (resolution[1] %/% 2) + 1:resolution[1]
+    out_iy <- (resolution[2] %/% 2) + 1:resolution[2]
+    
+    outbuf <- matrix(0, nrow = resolution[1], ncol = resolution[2])
+    buf1 <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    buf2 <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+
     dims <- pp_covariate$dims
     window <- pp_covariate$window
 
-    basis <- fft(basis)
-    dim(basis) <- dims * 2
+    buf1[covar_ix, covar_iy] <- pp_covariate$covariate
+    buf2[basis_ix, basis_iy] <- basis
 
-    vec <- Re(fft(basis * pp_covariate$covariate, inverse = TRUE) / prod(dim(basis)))
-    Rcov(spatstat.geom::as.im(vec[1:dims[1], 1:dims[2]], W = window))
+    vec <- Re(fft(fft(buf1) * fft(buf2), inverse = TRUE)) / prod(2 * resolution)
+    outbuf[] <- vec[out_ix, out_iy]
+    Rcov(spatstat.geom::as.im(outbuf, W = window))
 }
 
 
@@ -270,100 +286,76 @@ extract_basis_from_spec <- function(smooth_spec) {
 }
 
 
+#' @exportS3Method
+smooth.construct.conv.smooth.spec <- function(object, data, knots) {
+ 
+    extra <- object$xt
+    ctxt <- extra$context
+    
 
-construct_conv_internal_basis <- function (object, data, knots ) {
-    ## TODO penalty order logic
+    term <- object$term
+    coords <- data[[object$term]]
+
+    
+    conv_data <- extract_data(coords)
+
+    ## get points from process
+    ## compute distance matrix from all points of process to all target points
+
+    ## construct spline basis on this
+
+    
+    ## use the below logic for linear process covariates
+
+    resolution <- conv_data[[1]]$dims
+
+    xseq <- seq(from = -1L, to = 1L, length.out = resolution[1])
+    yseq <- seq(from = -1L, to = 1L, length.out = resolution[2])
+
+    distrast <- outer(xseq, yseq, function(x,y) sqrt(x^2 + y^2))
+    local_data <- list(distances = c(distrast))
+    
+    nknots <- object$bs.dim
+    if(nknots < 1) {
+        nknots <- 10
+        object$bs.dim <- nknots
+    }
+    
     n_right_boundary_knots <- 2L
     n_left_boundary_knots <- 2L
     
-    ## left boundary knots go negative
-    ## right boundary knots lead to hard cut off at desired value
-    
-    nknots <- object$bs.dim
-    if(nknots < 0) {
-        nknots <- 10
-        bs.dim <- 10
-    }
-    
-    extra <- object$xt
-    max_dist <- extra$max_distance
-
-    if(is.null(max_dist)) {
-        max_dist_prop <- extra$max_distance_proportion
-        ## TODO fix magic number default
-        if(is.null(max_dist_prop)) max_dist_prop = 0.25
-
-        max_dist <- max_dist_prop * get_max_distance(data)
-    }
-
-    lknots <- seq(from = 0, to = max_dist, length.out = (nknots + n_left_boundary_knots))
+    lknots <- seq(from = 0L, to = 1L, length.out = (nknots + n_right_boundary_knots))
     interval <- lknots[2] - lknots[1] 
     lknots <- c(-2 * interval, -1 * interval, lknots)
 
-    if(is.null(knots)) knots <- list()
-    knots[["distances"]] <- lknots
+    ## TODO user supplied knots
+    knots <- list(distances = lknots)
 
     basis_term <- extract_basis_from_spec(object)[-1]
     if (is_empty(basis_term)) basis_term <- 'bs2'
 
     intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim, xt = object$xt)
-    intern_call$label <- paste0('conv(', basis_term, ')')
-
-    ## internal basis construction including penalty
-    ## penalty calculated internally
-    local_data <- seq(from = 0, to = get_max_distance(data), length.out = 1000L)
+    intern_call$label <- paste0('conv(', object$term, ')')
     
-    basis <- smooth.construct(intern_call, data = list(distances = local_data), knots = knots)
+    basis <- smooth.construct(intern_call, data = local_data, knots = knots)
 
-    basis$internal_basis <- basis
-    basis$term <- object$term
-    basis
-}
-
-
-#' @exportS3Method
-smooth.construct.conv.smooth.spec <- function(object, data, knots) {
-    ## TODO
-    ## this should just be a standard Pcov
-    term <- object$term
-    coords <- data[[object$term]]
-    conv_data <- extract_data(coords)
-    
-    extra <- object$xt
-    ctxt <- extra$context
-    
-    ## if (!is.null(ctxt)) {
-    ##     initial <- is.na(ctxt$context)
-    ## }
-
-    basis <- construct_conv_internal_basis(object, conv_data, knots)
+    ## preallocate output design
+    distance_design <- basis$X
+    ## number of distinct Pcov values
     bases <- vector(mode = 'list', length = length(conv_data))    
-
 
     for (i in seq_along(bases)){
         current_pp <- conv_data[[i]]
-
-        pred_dat <- list(distances = current_pp$distances)
-        
-        ## TODO uniquely at each distance
-        distance_design <- Predict.matrix(basis$internal_basis, data = pred_dat)
-        ## preallocate output design
-        convolutional_design <- distance_design * 0L
-
 
         ncols <- ncol(convolutional_design)
         interp_basis <- vector(mode = 'list', length = ncols)
 
         for(basis_index in 1:ncols)
         {
-            to_conv <- distance_design[,basis_index]
-            lc <- convolve_basis ( to_conv, current_pp)
-            interp_basis[[basis_index]] <- lc
+            interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp)
         }
         bases[[i]] <- interp_basis
     }
-
-    e <<- environment()
 
     ## then in this step apply this to each marked set seperately
     ## in that way everything is now pooled
@@ -414,10 +406,64 @@ Predict.matrix.Convspline.smooth <- function(object, data) {
 
 
 
+alg_environment <- function ( ){
+    e <-  rlang::env()
+
+    resolution <- c(128, 128)
+
+    e$cbuf_covariate <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    e$cbuf_basis <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    e$outbuf <- matrix(0, nrow = resolution[1], ncol = resolution[2])
+    e$drast <- outer(
+        X = seq(from = -1, to = 1, length.out = resolution[1]),
+        Y = seq(from = -1, to = 1, length.out = resolution[2]),
+        \(x,y) sqrt(x^2 + y^2))
+
+    covar_ix <- 1:resolution[1]
+    covar_iy <- 1:resolution[2]
+
+    basis_ix <- 1:resolution[1]
+    basis_iy <- 1:resolution[2]
+    
+    out_ix <- (resolution[1] %/% 2) + 1:resolution[1]
+    out_iy <- (resolution[2] %/% 2) + 1:resolution[2]
+}
+
+
 #' sgam is a thin wrapper around gam that provides revision capabilities. 
 ## 
 #' @export
 sgam <- function(formula, data, conv_control, ... ) {
+
+    resolution <- c(128, 128)
+
+    cbuf_covariate <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    cbuf_basis <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    outbuf <- matrix(0, nrow = resolution[1], ncol = resolution[2])
+    covar.test <- spatstat.geom::as.im(swedishpines)$v
+
+
+    basis <- splines::spline.des(
+                          knots = seq(from = -0.1, to = 2, length.out = 45),
+                          c(drast),
+                          outer.ok = TRUE)
+                          
+                                 
+
+
+    cbuf_covariate[covar_ix, covar_iy] <- c(covar.test)
+    ## line for visibility
+    ## cbuf_covariate[12, covar_iy] <- 1
+    cbuf_basis[basis_ix, basis_iy] <- c(basis$design[,28])
+
+    x <- fft(cbuf_covariate)
+    y <- fft(cbuf_basis)
+
+    out <- Re(fft(x * y, inverse = TRUE)) / prod(2 * resolution)
+
+
+    outbuf[] <- out[out_ix, out_iy]
+    
     fit <- gam(formula, data, conv_control, ...)
     class(fit) <- c('sgam', class(fit))
 }
@@ -434,8 +480,6 @@ sgam <- function(formula, data, conv_control, ... ) {
 spline_spec_test <- function ( ) {
     
 }
-
-
 
 
 ## TODO
