@@ -86,3 +86,20 @@ Rcov_prepare.default <- function(object, ...){
     stop(message)
 }
 
+
+
+
+if (FALSE){ 
+rasterize_road <- function(road, nr = 512, nc = 512) {
+    ovec <- vect(road)
+    orast <- rast(ovec, nr, nc)
+
+    linerast <- rasterize(ovec, orast, background = 0)
+    matrast <- as.matrix(linerast, wide = TRUE)
+
+    for (i in 1:ncol(matrast)){
+        matrast[,i] <- rev(matrast[,i])
+    }
+    spatstat.geom::im(matrast, xrange = c(bb$xmin, bb$xmax), yrange = c(bb$ymin, bb$ymax))
+}
+}
