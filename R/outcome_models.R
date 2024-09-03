@@ -288,16 +288,17 @@ extract_basis_from_spec <- function(smooth_spec) {
 
 #' @exportS3Method
 smooth.construct.conv.smooth.spec <- function(object, data, knots) {
- 
+
+    ldata <- data[[object$term]]
+    
     extra <- object$xt
     ctxt <- extra$context
     
 
     term <- object$term
-    coords <- data[[object$term]]
-
     
-    conv_data <- extract_data(coords)
+    coords <- extract_coords(ldata)
+    conv_data <- extract_data(ldata)
 
     ## get points from process
     ## compute distance matrix from all points of process to all target points
@@ -311,6 +312,8 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
     xseq <- seq(from = -1L, to = 1L, length.out = resolution[1])
     yseq <- seq(from = -1L, to = 1L, length.out = resolution[2])
+
+
 
     distrast <- outer(xseq, yseq, function(x,y) sqrt(x^2 + y^2))
     local_data <- list(distances = c(distrast))
@@ -336,6 +339,9 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
     intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim, xt = object$xt)
     intern_call$label <- paste0('conv(', object$term, ')')
+
+
+
     
     basis <- smooth.construct(intern_call, data = local_data, knots = knots)
 
@@ -347,7 +353,7 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     for (i in seq_along(bases)){
         current_pp <- conv_data[[i]]
 
-        ncols <- ncol(convolutional_design)
+        ncols <- ncol(distance_design)
         interp_basis <- vector(mode = 'list', length = ncols)
 
         for(basis_index in 1:ncols)
@@ -359,11 +365,15 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
     ## then in this step apply this to each marked set seperately
     ## in that way everything is now pooled
-    basis$interpolation_basis <- bases
-    class(basis) <- 'Convspline.smooth'
-    basis$X <- Predict.matrix.Convspline.smooth(basis, data)
 
-    return(basis)
+    object$internal_basis <- basis
+    object$interpolation_basis <- bases
+    class(object) <- 'Convspline.smooth'
+
+
+    object$X <- Predict.matrix.Convspline.smooth(object, data)
+
+    return(object)
 }
 
 
@@ -375,7 +385,8 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
 #' @export
 Predict.matrix.Convspline.smooth <- function(object, data) {
-    coords <- data[[object$term]]
+    coords <- extract_coords(data[[object$term]])
+    
     interp_basis <- object$interpolation_basis
 
     ncoord <- length(coords)

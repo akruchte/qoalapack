@@ -9,7 +9,7 @@ Define <- function(sym, ...){
 `[.Definition_declaration` <- function(fdec, ...){
 
     structure(
-        list = (fdec = fdec)
+        list = (fdec = fdec),
         class = "Type_declaration")
 
     function(body){}

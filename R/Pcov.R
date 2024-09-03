@@ -98,7 +98,7 @@ conv_prepare <- function(object, resolution, extent, fractional = TRUE, normaliz
 
     list(covariate =matrix(immat$v, nrow = resolution[1], ncol = resolution[2]),
          window = object$window,
-         dims = dimyx,
+         dims = dimyx
          )
 }
 

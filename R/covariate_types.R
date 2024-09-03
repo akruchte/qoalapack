@@ -6,6 +6,18 @@ evokeable <- function(data) {
 }
 ## source('coord.R')
 
+#' covariate placeholders should carry the relevant information regarding
+#' the appropriate single level entity  information needed in model fitting (such as mgcv::gam)
+#'  cases include an age, sex, geo-coordinate (x,y), or possibly higher order coordinates, (x,y,t, w) for extra w
+#' @export
+placeholder_value <- function(value) {
+  structure(value, class = c('placeholder_value', 'numeric'))
+}
+#' @export
+print.placeholder_value <- function(value) {
+  cat(str_glue('(({value}))\n\n'))
+}
+
 #' @export
 evaluate <- function(object, ...){
  UseMethod('evaluate')
@@ -25,24 +37,11 @@ evaluate <- function(object, ...){
 #' @param coords A vector of coordinates
 #' @param data Additional spatial data indexed by coords
 #'  @export
-covariate_placeholder <- function(data, coords,  ...) {
-
-    if (missing(coords)) {
-        stop("default coords not implemented")
-        message("Initializing placeholder covariate at default values\n")
-        coords <- default_points(extent(data))
-    }
-    coords <- coord(coords)
-    
-    pdata <- prepare_placeholder_data(data, ...)
-    
-    structure(
-        coord(coords),
-        class = c('covariate_placeholder', class(coords)),
-        meta = list(),
-        data = pdata$data,
-        data_type = pdata$data_type,
-        mapping = rep(1, length(coords)))
+covariate_placeholder <- function(data, coords) {
+  structure(rep(placeholder_value(1), length(coords)),
+            class = c('covariate_placeholder', 'numeric'),
+            coords = coords,
+            data = data)
 }
 
 #' @export
@@ -95,27 +94,26 @@ c.covariate_placeholder <- function(x, y, ...) {
 
 
 #' @exportS3Method
-print.covariate_placeholder <- function(object){
-    cat('A Covariate Placeholder\n')
-    cat('With ',  length(object), ' coordinates.')
-    cat('\n')
-    NextMethod()
+ print.covariate_placeholder <- function(object){
+  cat('A Covariate Placeholder\n')
 }
 
 ## TODO
 #' @export
 `[.covariate_placeholder` <- function(object, ...){
-    warning("NOT IMPLEMENTED FOR METADATA")
-    NextMethod()
+  covariate_placeholder(extract_data(object), extract_coords(object)[...])
 }
 
-#' extract_data
-#' 
-#' covariate_placeholder -> metadata
 #' @export
 extract_data <- function(object) {
   attr(object, 'data')
 }
+
+#' @export
+extract_coords <- function(object) {
+  attr(object, 'coords')
+}
+
 
 #' extract_data
 #' 
