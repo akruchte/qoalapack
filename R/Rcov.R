@@ -49,12 +49,17 @@ Rcov_prepare.stars <- function ( )
 evaluate.Rcov <- function(object, locations, ...){
     stopifnot(is_coord(locations))
 
-    x <- coordx(locations)
-    y <- coordy(locations)
+    x <- coordx(locations)$x
+    y <- coordy(locations)$y
 
-    interpolator <- switch(attr(object, 'interpolator'),
-                           'bilin' = function(r) spatstat.geom::interp.im(r, x,y, bilinear = TRUE),
-                           'spatstat' = function(r) spatstat.geom::interp.im(r, x,y, bilinear = FALSE))
+    interpolation_choice <- attr(object, 'interpolator')
+    if (interpolation_choice == "bilin") {
+        interpolator <- function(r) spatstat.geom::interp.im(r, x,y, bilinear = TRUE)
+
+    }
+     if (interpolation_choice == "spatstat") {   
+         interpolator <-  function(r) spatstat.geom::interp.im(r, x,y, bilinear = FALSE)
+     }
 
     do.call(c, lapply(object, interpolator))
 }

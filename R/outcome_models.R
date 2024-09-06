@@ -236,9 +236,7 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 
 
 #' @export
-convolve_basis <- function(basis, pp_covariate) {
-
-    resolution <- pp_covariate$dims
+convolve_basis <- function(basis, pp_covariate, resolution) {
 
     covar_ix <- 1:resolution[1]
     covar_iy <- 1:resolution[2]
@@ -283,38 +281,31 @@ extract_basis_from_spec <- function(smooth_spec) {
 
 
 #' @exportS3Method
-smooth.construct.lconv.smooth.spec <- function(object, data, knots) {
-
-    ldata <- data[[object$term]]
+smooth.construct.conv.smooth.spec <- function(object, data, knots) {
+    odata <- data
+    data <- data[[object$term]]
     
     extra <- object$xt
     ctxt <- extra$context
-    
+
+    resolution <- object$xt$resolution
+    if (is.null(resolution)) resolution <- c(128, 128)
 
     term <- object$term
     
-    coords <- extract_coords(ldata)
-    conv_data <- extract_data(ldata)
-
-    ## get points from process
-    ## compute distance matrix from all points of process to all target points
-
-    ## construct spline basis on this
+    coords <- extract_coords(data)
+    conv_data <- extract_data(data)
 
     
-    ## use the below logic for linear process covariates
-
-    resolution <- conv_data[[1]]$dims
-
     xseq <- seq(from = -1L, to = 1L, length.out = resolution[1])
     yseq <- seq(from = -1L, to = 1L, length.out = resolution[2])
-
 
 
     distrast <- outer(xseq, yseq, function(x,y) sqrt(x^2 + y^2))
     local_data <- list(distances = c(distrast))
     
     nknots <- object$bs.dim
+
     if(nknots < 1) {
         nknots <- 10
         object$bs.dim <- nknots
@@ -336,8 +327,6 @@ smooth.construct.lconv.smooth.spec <- function(object, data, knots) {
     intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim, xt = object$xt)
     intern_call$label <- paste0('conv(', object$term, ')')
 
-
-
     
     basis <- smooth.construct(intern_call, data = local_data, knots = knots)
 
@@ -354,7 +343,7 @@ smooth.construct.lconv.smooth.spec <- function(object, data, knots) {
 
         for(basis_index in 1:ncols)
         {
-            interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp)
+            interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp, resolution)
         }
         bases[[i]] <- interp_basis
     }
@@ -366,88 +355,18 @@ smooth.construct.lconv.smooth.spec <- function(object, data, knots) {
     object$interpolation_basis <- bases
     class(object) <- 'Convspline.smooth'
 
-
-    object$X <- Predict.matrix.LConvspline.smooth(object, data)
+    object$X <- Predict.matrix.Convspline.smooth(object, odata)
 
     return(object)
 }
 
 
 
-
-smooth.construct.conv.smooth.spec <- function(object, data, knots){
-
-    ldata <- data[[object$term]]
-    
-    extra <- object$xt
-    ctxt <- extra$context
-
-    term <- object$term
-    
-    coords <- extract_coords(ldata)
-    conv_data <- extract_data(ldata)
-
-    dist_mat <- direct_conv(coord(conv_data), coord(coords))
-
-
-    local_data <- list(distances = c(distrast))
-    
-    nknots <- object$bs.dim
-    if(nknots < 1) {
-        nknots <- 10
-        object$bs.dim <- nknots
-    }
-    
-    n_right_boundary_knots <- 2L
-    n_left_boundary_knots <- 2L
-    
-    lknots <- seq(from = 0L, to = 1L, length.out = (nknots + n_right_boundary_knots))
-    interval <- lknots[2] - lknots[1] 
-    lknots <- c(-2 * interval, -1 * interval, lknots)
-
-    ## TODO user supplied knots
-    knots <- list(distances = lknots)
-
-    basis_term <- extract_basis_from_spec(object)[-1]
-    if (is_empty(basis_term)) basis_term <- 'bs2'
-
-    intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim, xt = object$xt)
-    intern_call$label <- paste0('conv(', object$term, ')')
+#' @export
 
 
 
-    
-    basis <- smooth.construct(intern_call, data = local_data, knots = knots)
 
-    ## preallocate output design
-    distance_design <- basis$X
-    ## number of distinct Pcov values
-    bases <- vector(mode = 'list', length = length(conv_data))    
-
-    for (i in seq_along(bases)){
-        current_pp <- conv_data[[i]]
-
-        ncols <- ncol(distance_design)
-        interp_basis <- vector(mode = 'list', length = ncols)
-
-        for(basis_index in 1:ncols)
-        {
-            interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp)
-        }
-        bases[[i]] <- interp_basis
-    }
-
-    ## then in this step apply this to each marked set seperately
-    ## in that way everything is now pooled
-
-    object$internal_basis <- basis
-    object$interpolation_basis <- bases
-    class(object) <- 'Convspline.smooth'
-
-
-    object$X <- Predict.matrix.LConvspline.smooth(object, data)
-
-}
 
 ## adaptive convolutions use a three dimensional convolution
 ## and then add an additional adaptive surface penalty
@@ -455,7 +374,9 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots){
 ## required mgcv function
 
 #' @export
-Predict.matrix.LConvspline.smooth <- function(object, data) {
+Predict.matrix.Convspline.smooth <- function(object, data) {
+
+    
     coords <- extract_coords(data[[object$term]])
     
     interp_basis <- object$interpolation_basis

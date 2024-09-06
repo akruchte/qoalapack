@@ -44,35 +44,6 @@ covariate_placeholder <- function(data, coords) {
             data = data)
 }
 
-#' @export
-prepare_placeholder_data <- function(data, ...){
-    UseMethod('prepare_placeholder_data')
-}
-
-## covariate placeholder is a coordinate marked with additional information, a context for evaluation, and an evaluation strategy
-
-
-prepare_placeholder_data.Pcov <- function(object, ...){
-    list(data = object, data_type = 'Pcov')
-}
-
-#' @exportS3Method
-prepare_placeholder_data.ppp <- function(object, ...){
-
-    stop("Not yet implemented for spatstat point process.")
-
-    message("Coercing spatstat point process to Pcov with default arguments.\n" )
-    list(data = object, data_type = 'unmarked ppp')
-}
-
-#' @exportS3Method
-prepare_placeholder_data.im <- function(object, ...){
-    list(data = object, data_type = 'image')
-}
-
-## Assume all point processes in data will be evaluated at the same set of coords
-     ## single   
-
 
 
 #' @exportS3Method
