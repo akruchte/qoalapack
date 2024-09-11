@@ -1,5 +1,3 @@
-
-
 #' @export 
 evokeable <- function(data) {
     new_vctr(data, 'evokeable')

@@ -4,3 +4,7 @@
 #' This is a shapefile dataset using the `sf` R package.
 #' TODO further documentation
 "allegheny_tracts"
+
+#' Sample Outcome Raster
+#'
+#' 
