@@ -1,4 +1,3 @@
-if (FALSE){
 dynadouble  <- function(init_values) {
     if (!is.double(init_values)) abort("init_values must be of type (double)")
 
@@ -12,4 +11,3 @@ dynadouble  <- function(init_values) {
 `+.fun`<- function(x,y){function(z) x(z) + y(z)}
 
 
-}

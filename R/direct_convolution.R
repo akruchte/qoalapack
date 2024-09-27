@@ -1,3 +1,4 @@
+
 #' Direct Convolution
 #' @param exposure_points a matrix of exposure point coordinates
 #' @param evaluation_points a matrix of evaluation point coordinates

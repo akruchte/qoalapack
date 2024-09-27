@@ -1,3 +1,28 @@
+#' Model Context
+#'
+#' Model context is an R6 class for capturing intermediate results of running mgcv functions, and not repeating them unnecessarily.
+#' @export
+model_context <- R6Class('model_context',
+                         public = list(
+                             context = NA,
+                             set_context = function(new_context) self$context <- new_context))
+
+
+model_configuration <- R6Class('model_configuration', list())
+
+## crude temporary implementation of outcome model
+## takes in a fitted model and provides a simple wrapper for calculating
+## quantities needed for estimation
+#' @export
+outcome_model <- function(model, prediction_locations) {
+    list(model = model,
+         mufun = outcome_fun(model, prediction_locations))
+}
+
+## returns a function f(i) for treatment A indexed by i.
+## f evaluates the predicted intensity at each of the originally specified locations when assigned a treatment value of A
+## expects that the model have treatment provided as the first term
+
 
 #' @export
 outcome_fun <- function(omodel, prediction_locations){
@@ -406,6 +431,46 @@ alg_environment <- function ( ){
     out_ix <- (resolution[1] %/% 2) + 1:resolution[1]
     out_iy <- (resolution[2] %/% 2) + 1:resolution[2]
 }
+
+
+#' sgam is a thin wrapper around gam that provides revision capabilities. 
+## 
+#' @export
+sgam <- function(formula, data, conv_control, ... ) {
+
+    resolution <- c(128, 128)
+
+    cbuf_covariate <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    cbuf_basis <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    outbuf <- matrix(0, nrow = resolution[1], ncol = resolution[2])
+    covar.test <- spatstat.geom::as.im(swedishpines)$v
+
+
+    basis <- splines::spline.des(
+                          knots = seq(from = -0.1, to = 2, length.out = 45),
+                          c(drast),
+                          outer.ok = TRUE)
+                          
+
+    cbuf_covariate[covar_ix, covar_iy] <- c(covar.test)
+    ## line for visibility
+    ## cbuf_covariate[12, covar_iy] <- 1
+    cbuf_basis[basis_ix, basis_iy] <- c(basis$design[,28])
+
+    x <- fft(cbuf_covariate)
+    y <- fft(cbuf_basis)
+
+    out <- Re(fft(x * y, inverse = TRUE)) / prod(2 * resolution)
+
+
+    outbuf[] <- out[out_ix, out_iy]
+    
+    fit <- gam(formula, data, conv_control, ...)
+    class(fit) <- c('sgam', class(fit))
+}
+
+
+
 
 
 ## given a certain parametric model use a spline based model to test correctness of the specification
