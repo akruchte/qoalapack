@@ -92,7 +92,7 @@ conv_prepare <- function(object, resolution, extent, fractional = TRUE, normaliz
 
     ## DivideByPixelArea guarantees that the integral of the rasterized process equals the
     ## actual value of the process, e.g. perfom normalization
-    immat <- spatstat.geom::pixellate(object, DivideByPixelArea = TRUE, fractional = TRUE, dimyx = dimyx)
+    immat <- spatstat.geom::pixellate(object, DivideByPixelArea = FALSE, fractional = TRUE, dimyx = dimyx)
 
     list(covariate =matrix(immat$v, nrow = resolution[1], ncol = resolution[2]),
          window = object$window,

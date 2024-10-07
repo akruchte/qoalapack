@@ -49,8 +49,8 @@ Rcov_prepare.stars <- function ( )
 evaluate.Rcov <- function(object, locations, ...){
     stopifnot(is_coord(locations))
 
-    x <- coordx(locations)$x
-    y <- coordy(locations)$y
+    x <- coordx(locations)
+    y <- coordy(locations)
 
     interpolation_choice <- attr(object, 'interpolator')
     if (interpolation_choice == "bilin") {

@@ -1,3 +1,11 @@
+#' @exportS3Method
+print.Convspline.smooth <- function(ob, ...) {
+    cat("A Convolutional Spline Basis: \n ")
+    cat("Object names:\n")
+    cat(paste(names(ob), collapse = "   "))
+    cat("\n")
+}
+
 #' @export
 ppmod <- function(Y, Q, ppcov, covariates = NULL, dimyx = c(128, 128), k = NULL, bs = 'tp') {
     stopifnot(!is.null(names(ppcov)))
@@ -196,6 +204,8 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     data <- data[[object$term]]
     
     extra <- object$xt
+    max_distance_prop <- extra$max_distance_prop
+    if(is.null(max_distance_prop)) max_distance_prop <- 1
     ctxt <- extra$context
 
     resolution <- object$xt$resolution
@@ -224,7 +234,7 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     n_right_boundary_knots <- 2L
     n_left_boundary_knots <- 2L
     
-    lknots <- seq(from = 0L, to = 1L, length.out = (nknots + n_right_boundary_knots))
+    lknots <- seq(from = 0L, to = max_distance_prop * sqrt(2), length.out = (nknots + n_right_boundary_knots))
     interval <- lknots[2] - lknots[1] 
     lknots <- c(-2 * interval, -1 * interval, lknots)
 
@@ -237,16 +247,13 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim, xt = object$xt)
     intern_call$label <- paste0('conv(', object$term, ')')
 
-    
     basis <- smooth.construct(intern_call, data = local_data, knots = knots)
 
     ## preallocate output design
     distance_design <- basis$X
     ## number of distinct Pcov values
-    bases <- vector(mode = 'list', length = length(conv_data))    
 
-    for (i in seq_along(bases)){
-        current_pp <- conv_data[[i]]
+        current_pp <- conv_data[[1]]
 
         ncols <- ncol(distance_design)
         interp_basis <- vector(mode = 'list', length = ncols)
@@ -255,14 +262,18 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
         {
             interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp, resolution)
         }
-        bases[[i]] <- interp_basis
-    }
+
+
 
     ## then in this step apply this to each marked set seperately
     ## in that way everything is now pooled
 
     object$internal_basis <- basis
-    object$interpolation_basis <- bases
+    object$interpolation_basis <- interp_basis
+    object$evaluation_coords <- coords
+    object$window <- conv_data[[1]]$window
+    object$im_dims <- conv_data[[1]]$dims
+    object$local_data <- local_data
     class(object) <- 'Convspline.smooth'
 
     object$X <- Predict.matrix.Convspline.smooth(object, odata)
@@ -271,8 +282,6 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 }
 
 
-
-#' @export
 
 
 
@@ -293,21 +302,17 @@ Predict.matrix.Convspline.smooth <- function(object, data) {
 
     ncoord <- length(coords)
     
-    nr <- ncoord * length(interp_basis)
+    nr <- ncoord 
     ## assumes all bases have same dimension which they certainly should
-    nc <- length(interp_basis[[1]])
+    nc <- length(interp_basis)
     Xmat <- matrix(0, nrow = nr, ncol = nc)
 
     for (i in 1:length(interp_basis)){
 
         locinterp <- interp_basis[[i]]
 
-        for (j in 1:nc){
-            ## e <<- environment()
-            row_range <- (((i - 1) * ncoord) + 1) : (((i) * ncoord) )
-            interp <- evaluate(locinterp[[j]], coords)
-            Xmat[row_range, j] <- interp
-        }
+           interp <- spatstat.geom::interp.im(locinterp[[1]], cbind(coordx(coords), coordy(coords)))
+           Xmat[, i] <- interp
     }
 
     Xmat
@@ -341,45 +346,6 @@ alg_environment <- function ( ){
     out_ix <- (resolution[1] %/% 2) + 1:resolution[1]
     out_iy <- (resolution[2] %/% 2) + 1:resolution[2]
 }
-
-
-#' sgam is a thin wrapper around gam that provides revision capabilities. 
-## 
-#' @export
-sgam <- function(formula, data, conv_control, ... ) {
-
-    resolution <- c(128, 128)
-
-    cbuf_covariate <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
-    cbuf_basis <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
-    outbuf <- matrix(0, nrow = resolution[1], ncol = resolution[2])
-    covar.test <- spatstat.geom::as.im(swedishpines)$v
-
-
-    basis <- splines::spline.des(
-                          knots = seq(from = -0.1, to = 2, length.out = 45),
-                          c(drast),
-                          outer.ok = TRUE)
-                          
-
-    cbuf_covariate[covar_ix, covar_iy] <- c(covar.test)
-    ## line for visibility
-    ## cbuf_covariate[12, covar_iy] <- 1
-    cbuf_basis[basis_ix, basis_iy] <- c(basis$design[,28])
-
-    x <- fft(cbuf_covariate)
-    y <- fft(cbuf_basis)
-
-    out <- Re(fft(x * y, inverse = TRUE)) / prod(2 * resolution)
-
-
-    outbuf[] <- out[out_ix, out_iy]
-    
-    fit <- gam(formula, data, conv_control, ...)
-    class(fit) <- c('sgam', class(fit))
-}
-
-
 
 
 
@@ -451,4 +417,71 @@ update_exposure <- function(model, new_exposure) {
 
     model
 }
+
+
+#' export
+indirect_gam <- function (formula, data, family, indir.max.iter = 10 ){
+    G <- gam(formula = formula, data = data,
+             family = family,
+             offset = rep(0, nrow(data)), fit = FALSE)
+
+    smooths <- G$smooth
+    
+    conv_smooths <- keep(smooths, \(s)inherits(s, "Convspline.smooth"))
+    offset <- G$offset
+
+    F <- gam(G = G, data = data)
+
+    internal_bases <- map(conv_smooths, "internal_basis")
+    indirect_scheme <- seq(from = 0.01, to = sqrt(2), length.out = 500)
+
+    lps <- predict(F, type = "lpmatrix")
+
+    for (iter in 1:indir.max.iter) {
+         offset <- offset * 0
+        for(i in 1:length(internal_bases)) {
+            coefs <- coef(F)
+            coef_name <- names(coefs)
+            ## add a zero intercept
+            start_coef_name <- stringr::str_detect(coef_name, conv_smooths[[i]]$term)
+            start_coef <- coefs[start_coef_name]
+            
+            active <- internal_bases[[i]]
+            ob <- s(distances, bs = "bs2", k = active$bs.dim)
+            
+            ## Xp <-  Predict.matrix(active, data = data.frame(distances = indirect_scheme))
+            Xp <- smoothCon(ob,
+                            data = data.frame(distances = indirect_scheme),
+                            knots = list(distances = active$knots),
+                            absorb.cons = TRUE)[[1]]$X
+            
+
+            current_term <- Xp %*% start_coef
+            rescale <- min(current_term)
+            current_term <- current_term - rescale
+            
+            gauss_fit <- nls(current_term ~    alpha * exp(- (indirect_scheme - off )^2 / sigma),
+                             data = list(indirect_scheme = indirect_scheme, current_term = current_term),
+                             start = list(alpha = max(current_term), sigma = 1, off = 0),
+                             lower = c(0, 0, 0),
+                             algorithm = "port")
+            
+            gauss_proj_coef <- lm.fit(Xp, fitted(gauss_fit))$coef
+            
+
+            Xloc <- lps[,coef_name[start_coef_name]]
+            noff <- Xloc %*% gauss_proj_coef + rescale 
+            
+            offset <- offset + c(noff)
+            ## spatstat.geom::im(offset_im, matrix(offset_im, nrow = dims[1], ncol = dims[2]), 
+        }
+         G$offset <- offset
+         F <- gam(G = G)
+    }
+    F
+    
+}
+
+
+
 
