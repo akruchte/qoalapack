@@ -1,5 +1,3 @@
-
-
 #' @export 
 evokeable <- function(data) {
     new_vctr(data, 'evokeable')
@@ -72,7 +70,7 @@ c.covariate_placeholder <- function(x, y, ...) {
 ## TODO
 #' @export
 `[.covariate_placeholder` <- function(object, ...){
-  covariate_placeholder(extract_data(object), extract_coords(object)[...])
+  covariate_placeholder(data = extract_data(object), coords = extract_coords(object)[...])
 }
 
 #' @export

@@ -253,15 +253,15 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
     distance_design <- basis$X
     ## number of distinct Pcov values
 
-        current_pp <- conv_data[[1]]
+    current_pp <- conv_data[[1]]
 
-        ncols <- ncol(distance_design)
-        interp_basis <- vector(mode = 'list', length = ncols)
+    ncols <- ncol(distance_design)
+    interp_basis <- vector(mode = 'list', length = ncols)
 
-        for(basis_index in 1:ncols)
-        {
-            interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp, resolution)
-        }
+    for(basis_index in 1:ncols)
+    {
+        interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp, resolution)
+    }
 
 
 
@@ -280,6 +280,92 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
     return(object)
 }
+
+
+
+#' @exportS3Method
+smooth.construct.conv2.smooth.spec <- function(object, data, knots) {
+    odata <- data
+    data <- data[[object$term]]
+    
+    extra <- object$xt
+    max_distance_prop <- extra$max_distance_prop
+    if(is.null(max_distance_prop)) max_distance_prop <- 1
+    ctxt <- extra$context
+
+    resolution <- object$xt$resolution
+    if (is.null(resolution)) resolution <- c(128, 128)
+
+    term <- object$term
+    
+    coords <- extract_coords(data)
+    conv_data <- extract_data(data)
+
+    
+    xseq <- seq(from = -1L, to = 1L, length.out = resolution[1])
+    yseq <- seq(from = -1L, to = 1L, length.out = resolution[2])
+
+
+
+
+    xygrid <- expand_grid(y = yseq, x = xseq)
+    distrast <- outer(xseq, yseq, function(x,y) sqrt(x^2 + y^2))
+    clip <- distrast <= max_distance_prop
+    local_data <- list(x = xygrid$x, y = xygrid$y)
+    
+    nknots <- object$bs.dim
+
+    if(nknots < 1) {
+        nknots <- 10
+        object$bs.dim <- nknots
+    }
+    
+    lknots <- seq(from = -max_distance_prop, to = max_distance_prop, length.out = nknots)
+
+    ## TODO user supplied knots
+    knots <- list(x = lknots, y = lknots)
+
+
+    basis_term <- extract_basis_from_spec(object)[-1]
+    if (is_empty(basis_term)) basis_term <- 'bs2'
+
+    intern_call <- te(x,y,  fx = object$fixed, k = object$bs.dim, xt = object$xt)
+    intern_call$label <- paste0('conv(', object$term, ')')
+
+    basis <- smooth.construct(intern_call, data = local_data, knots = knots)
+
+    ## preallocate output design
+    distance_design <- basis$X
+    ## number of distinct Pcov values
+
+    current_pp <- conv_data[[1]]
+
+    ncols <- ncol(distance_design)
+    interp_basis <- vector(mode = 'list', length = ncols)
+
+    for(basis_index in 1:ncols)
+    {
+        interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp, resolution)
+    }
+
+
+
+    ## then in this step apply this to each marked set seperately
+    ## in that way everything is now pooled
+
+    object$internal_basis <- basis
+    object$interpolation_basis <- interp_basis
+    object$evaluation_coords <- coords
+    object$window <- conv_data[[1]]$window
+    object$im_dims <- conv_data[[1]]$dims
+    object$local_data <- local_data
+    class(object) <- 'Convspline.smooth'
+
+    object$X <- Predict.matrix.Convspline.smooth(object, odata)
+
+    return(object)
+}
+
 
 
 
@@ -311,8 +397,8 @@ Predict.matrix.Convspline.smooth <- function(object, data) {
 
         locinterp <- interp_basis[[i]]
 
-           interp <- spatstat.geom::interp.im(locinterp[[1]], cbind(coordx(coords), coordy(coords)))
-           Xmat[, i] <- interp
+        interp <- spatstat.geom::interp.im(locinterp[[1]], cbind(coordx(coords), coordy(coords)))
+        Xmat[, i] <- interp
     }
 
     Xmat
@@ -417,28 +503,51 @@ update_exposure <- function(model, new_exposure) {
 
     model
 }
+updateF <- function(F, G,  offset){
+    G$offset <- offset
+    F <- gam(G = G, start = coef(F))
+    class(F) <- c("indirect_gam", class(F))
+}
+
+
 
 
 #' export
-indirect_gam <- function (formula, data, family, indir.max.iter = 10 ){
-    G <- gam(formula = formula, data = data,
-             family = family,
-             offset = rep(0, nrow(data)), fit = FALSE)
+indirect_gam <- function (
+                          formula,
+                          data,
+                          family,
+                          indir.max.iter = 10,
+                          delta.tol = 1e-5,
+                          regularity_model = c("distance_gaussian, 2d_gaussian"))
+{
+    regularity_model <- match.arg(regularity_model)
+    G <- gam(formula = formula, family = family, data = data, offset = rep(0, nrow(data)), fit = FALSE)
+    F <- gam(G = G)
+    class(F) <- c("indirect_gam", class(F))
 
-    smooths <- G$smooth
-    
+    smooths <- F$smooth
     conv_smooths <- keep(smooths, \(s)inherits(s, "Convspline.smooth"))
-    offset <- G$offset
-
-    F <- gam(G = G, data = data)
+    offset <- F$offset
 
     internal_bases <- map(conv_smooths, "internal_basis")
-    indirect_scheme <- seq(from = 0.01, to = sqrt(2), length.out = 500)
 
+    if(regularity_model == "2d_gaussian") {
+        x <- seq(from = -1, to = 1, length.out = 100)
+        y <- seq(from = -1, to = 1, length.out = 100)
+        regularity_data <- expand_grid(x = x, y = y)
+    }
+    if (regularity_model == "distance_gaussian") {
+        regularity_data <- data.frame(distances = seq(from = 0.01, to = sqrt(2), length.out = 500))
+    }
+    
     lps <- predict(F, type = "lpmatrix")
 
     for (iter in 1:indir.max.iter) {
-         offset <- offset * 0
+        if(iter != 1) {
+            last_fit <- gauss_fit
+        }
+        offset <- offset * 0
         for(i in 1:length(internal_bases)) {
             coefs <- coef(F)
             coef_name <- names(coefs)
@@ -447,40 +556,67 @@ indirect_gam <- function (formula, data, family, indir.max.iter = 10 ){
             start_coef <- coefs[start_coef_name]
             
             active <- internal_bases[[i]]
-            ob <- s(distances, bs = "bs2", k = active$bs.dim)
-            
-            ## Xp <-  Predict.matrix(active, data = data.frame(distances = indirect_scheme))
-            Xp <- smoothCon(ob,
-                            data = data.frame(distances = indirect_scheme),
-                            knots = list(distances = active$knots),
-                            absorb.cons = TRUE)[[1]]$X
-            
 
-            current_term <- Xp %*% start_coef
+            current_term <- c(Xp %*% start_coef)
+            ## rescale and recenter regularity model
             rescale <- min(current_term)
             current_term <- current_term - rescale
+            regularity_data$current_term <- current_term
             
-            gauss_fit <- nls(current_term ~    alpha * exp(- (indirect_scheme - off )^2 / sigma),
-                             data = list(indirect_scheme = indirect_scheme, current_term = current_term),
-                             start = list(alpha = max(current_term), sigma = 1, off = 0),
-                             lower = c(0, 0, 0),
-                             algorithm = "port")
+            if (regularity_model == "distance_gaussian")
+            {
+                ob <- s(distances, bs = "bs2", k = active$bs.dim)
+                Xp <- smoothCon(ob,
+                                data = regularity_data,
+                                knots = list(distances = active$knots),
+                                absorb.cons = TRUE)[[1]]$X
+                
+
+                gauss_fit <- nls(current_term ~    alpha * exp(- (regularity_data - off )^2 / sigma),
+                                 data = regularity_data,
+                                 start = list(alpha = max(current_term), sigma = 1, off = 0),
+                                 lower = c(0, 0, 0),
+                                 algorithm = "port")
+
+            }  
+            if (regularity_model == "2d_gaussian") {
+                ob <- te(x, y, k = 30)
+                Xp <- smoothCon(ob,
+                                data = regularity_data,
+                                absorb.cons = TRUE)[[1]]$X
+
+                gauss_fit <- nls(current_term ~    alpha * exp(- (x^2 + b * y^2 + c * x * y) / sigma),
+                                 data = list(x = regularity_data$x, y = regularity_data$y),
+                                 start = list(alpha = max(current_term), sigma = 1, b = 1, c = 0),
+                                 lower = c(0, 0, 0, -Inf),
+                                 algorithm = "port")
+
+            }
+
+
+            F$regularity_model <- gauss_fit
+
+            if(iter != 1) {
+                delta <- coef(gauss_fit) - coef(last_fit)
+                if(max(abs(delta)) < delta.tol) return(F)
+            }
             
             gauss_proj_coef <- lm.fit(Xp, fitted(gauss_fit))$coef
-            
 
             Xloc <- lps[,coef_name[start_coef_name]]
             noff <- Xloc %*% gauss_proj_coef + rescale 
             
             offset <- offset + c(noff)
-            ## spatstat.geom::im(offset_im, matrix(offset_im, nrow = dims[1], ncol = dims[2]), 
         }
-         G$offset <- offset
-         F <- gam(G = G)
+
+        F <- updateF(F, G, offset)
     }
-    F
-    
+    return(F)
 }
+
+
+
+
 
 
 

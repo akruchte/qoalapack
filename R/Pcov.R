@@ -63,6 +63,18 @@ pcov_prepare.ppp <- function(object, resolution, extent, ...){
 }
 
 #' @exportS3Method
+pcov_prepare.im <- function(object, resolution, extent, ...){
+    if (is.null(extent)) extent <-get_window_from_object(object)
+
+    dimyx <- resolution
+    immat <- object
+
+    list(covariate =(matrix(immat$v, nrow = resolution[1], ncol = resolution[2])),
+         window = object$window,
+         dims = dimyx
+         )
+}
+#' @exportS3Method
 pcov_prepare.default <- function(object, ...){
   cl <- class(object)[[1]]
   message <- paste0('Objects of type ', cl, ' not currently supported.')
