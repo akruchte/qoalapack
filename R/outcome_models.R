@@ -154,12 +154,12 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 
 
 #' @export
-convolve_basis <- function(basis, pp_covariate, resolution) {
+convolve_basis <- function(basis, pp_covariate, resolution, distance_mask) {
 
     covar_ix <- 1:resolution[1]
     covar_iy <- 1:resolution[2]
 
-    basis_ix <- 1:resolution[1]
+    basis_ix <- 1:resolution[1] 
     basis_iy <- 1:resolution[2]
     
     out_ix <- (resolution[1] %/% 2) + 1:resolution[1]
@@ -173,14 +173,40 @@ convolve_basis <- function(basis, pp_covariate, resolution) {
     window <- pp_covariate$window
 
     buf1[covar_ix, covar_iy] <- pp_covariate$covariate
-    buf2[basis_ix, basis_iy] <- basis
+    buf2[basis_ix, basis_iy] <- basis * distance_mask
 
     vec <- Re(fft(fft(buf1) * fft(buf2), inverse = TRUE)) / prod(2 * resolution)
     outbuf[] <- vec[out_ix, out_iy]
+    outbuf[outbuf < 0] <- 0
     Rcov(spatstat.geom::as.im(outbuf, W = window))
 }
 
+#' @export 
+scaled_gauss_kern <- function(scale) {
+    function(d) exp(-(d^2 ) / scale)
+}
 
+gauss_kern <- function(d) exp(-3 * d^2)
+
+#' @export
+pconv <- function(cov, kernel = gauss_kern, return_rast = FALSE, max_distance = sqrt(2)) {
+    
+    coords <- extract_coords(cov)
+    data <- extract_data(cov)
+    resolution <- data[[1]]$dims
+    xseq <- seq(from = -1L, to = 1L, length.out = resolution[1])
+    yseq <- seq(from = -1L, to = 1L, length.out = resolution[2])
+
+    distrast <- outer(xseq, yseq, function(x,y) sqrt(x^2 + y^2))
+    kern <- kernel(distrast)
+
+    rast <- convolve_basis(pp_covariate = data[[1]], basis = kern, resolution = resolution, distrast <= max_distance)
+    if (return_rast){
+        return(rast)
+    }
+    
+    spatstat.geom::interp.im(rast[[1]], x = coordx(coords), y = coordy(coords))
+}
 
 ## required mgcv function
 ## this function expects to receive data in the form of a covariate placeholder.
@@ -196,6 +222,8 @@ convolve_basis <- function(basis, pp_covariate, resolution) {
 extract_basis_from_spec <- function(smooth_spec) {
     stringr::str_remove(class(smooth_spec), stringr::fixed(".smooth.spec"))
 }
+
+
 
 
 #' @exportS3Method
@@ -267,6 +295,7 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
         distrast <- outer(xseq, yseq, function(x,y) sqrt(x^2 + y^2))
         local_data <- list(distances = c(distrast))
         nknots <- object$bs.dim
+        distance_mask <- distrast <= max_distance_prop
 
 
         if(nknots < 1) {
@@ -278,6 +307,7 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
         n_left_boundary_knots <- 2L
         
         lknots <- seq(from = 0L, to = max_distance_prop * sqrt(2), length.out = (nknots + n_right_boundary_knots))
+
         interval <- lknots[2] - lknots[1] 
         lknots <- c(-2 * interval, -1 * interval, lknots)
 
@@ -306,10 +336,8 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
     for(basis_index in 1:ncols)
     {
-        interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp, resolution)
+        interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp, resolution, distance_mask)
     }
-
-
 
     ## then in this step apply this to each marked set seperately
     ## in that way everything is now pooled
