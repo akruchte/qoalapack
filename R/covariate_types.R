@@ -1,10 +1,20 @@
-
-
 #' @export 
 evokeable <- function(data) {
     new_vctr(data, 'evokeable')
 }
 ## source('coord.R')
+
+#' covariate placeholders should carry the relevant information regarding
+#' the appropriate single level entity  information needed in model fitting (such as mgcv::gam)
+#'  cases include an age, sex, geo-coordinate (x,y), or possibly higher order coordinates, (x,y,t, w) for extra w
+#' @export
+placeholder_value <- function(value) {
+  structure(value, class = c('placeholder_value', 'numeric'))
+}
+#' @export
+print.placeholder_value <- function(value) {
+  cat(str_glue('(({value}))\n\n'))
+}
 
 #' @export
 evaluate <- function(object, ...){
@@ -25,54 +35,12 @@ evaluate <- function(object, ...){
 #' @param coords A vector of coordinates
 #' @param data Additional spatial data indexed by coords
 #'  @export
-covariate_placeholder <- function(data, coords,  ...) {
-
-    if (missing(coords)) {
-        stop("default coords not implemented")
-        message("Initializing placeholder covariate at default values\n")
-        coords <- default_points(extent(data))
-    }
-    coords <- coord(coords)
-    
-    pdata <- prepare_placeholder_data(data, ...)
-    
-    structure(
-        coord(coords),
-        class = c('covariate_placeholder', class(coords)),
-        meta = list(),
-        data = pdata$data,
-        data_type = pdata$data_type,
-        mapping = rep(1, length(coords)))
+covariate_placeholder <- function(data, coords) {
+  structure(rep(placeholder_value(1), length(coords)),
+            class = c('covariate_placeholder', 'numeric'),
+            coords = coords,
+            data = data)
 }
-
-#' @export
-prepare_placeholder_data <- function(data, ...){
-    UseMethod('prepare_placeholder_data')
-}
-
-## covariate placeholder is a coordinate marked with additional information, a context for evaluation, and an evaluation strategy
-
-
-prepare_placeholder_data.Pcov <- function(object, ...){
-    list(data = object, data_type = 'Pcov')
-}
-
-#' @exportS3Method
-prepare_placeholder_data.ppp <- function(object, ...){
-
-    stop("Not yet implemented for spatstat point process.")
-
-    message("Coercing spatstat point process to Pcov with default arguments.\n" )
-    list(data = object, data_type = 'unmarked ppp')
-}
-
-#' @exportS3Method
-prepare_placeholder_data.im <- function(object, ...){
-    list(data = object, data_type = 'image')
-}
-
-## Assume all point processes in data will be evaluated at the same set of coords
-     ## single   
 
 
 
@@ -95,27 +63,26 @@ c.covariate_placeholder <- function(x, y, ...) {
 
 
 #' @exportS3Method
-print.covariate_placeholder <- function(object){
-    cat('A Covariate Placeholder\n')
-    cat('With ',  length(object), ' coordinates.')
-    cat('\n')
-    NextMethod()
+ print.covariate_placeholder <- function(object){
+  cat('A Covariate Placeholder\n')
 }
 
 ## TODO
 #' @export
 `[.covariate_placeholder` <- function(object, ...){
-    warning("NOT IMPLEMENTED FOR METADATA")
-    NextMethod()
+  covariate_placeholder(data = extract_data(object), coords = extract_coords(object)[...])
 }
 
-#' extract_data
-#' 
-#' covariate_placeholder -> metadata
 #' @export
 extract_data <- function(object) {
   attr(object, 'data')
 }
+
+#' @export
+extract_coords <- function(object) {
+  attr(object, 'coords')
+}
+
 
 #' extract_data
 #' 

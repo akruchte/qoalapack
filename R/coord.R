@@ -128,3 +128,11 @@ Norm2.coord <- function(ob) {
 }
 
 
+#' @export
+as_matrix <- function(ob, ...){
+    UseMethod("as_matrix")
+}
+#' @exportS3Method
+as_matrix.coord <- function(ob) {
+    cbind(coordx(ob), coordy(ob))
+}

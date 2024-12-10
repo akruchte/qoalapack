@@ -1,91 +1,9 @@
-#' Model Context
-#'
-#' Model context is an R6 class for capturing intermediate results of running mgcv functions, and not repeating them unnecessarily.
-#' @export
-model_context <- R6Class('model_context',
-                         public = list(
-                             context = NA,
-                             set_context = function(new_context) self$context <- new_context))
-
-
-model_configuration <- R6Class('model_configuration', list())
-
-## crude temporary implementation of outcome model
-## takes in a fitted model and provides a simple wrapper for calculating
-## quantities needed for estimation
-#' @export
-outcome_model <- function(model, prediction_locations) {
-    list(model = model,
-         mufun = outcome_fun(model, prediction_locations))
-}
-
-## returns a function f(i) for treatment A indexed by i.
-## f evaluates the predicted intensity at each of the originally specified locations when assigned a treatment value of A
-## expects that the model have treatment provided as the first term
-
-
-#' @export
-outcome_fun <- function(omodel, prediction_locations){
-    if(missing(prediction_locations)) stop('Prediction dataset required')
-    linkinv <- exp
-
-    mu <- predict(omodel, newdata = prediction_locations, type = 'terms')
-
-    treat_term <- mu[,1]
-
-    mu_term <- rowSums(as.matrix(mu[,-1])) + attr(mu, 'constant')
-
-    denominator_mu <- linkinv(mu)
-    ## homoskedastic normal case
-
-    ## mufun is a function that predicts the potential outcome, at covariate values corresponding to those at each and every of the provided prediction locations
-    ## For each prediction location it returns the predicted value corresponding to the ith level of the observed treatments if the argument i is provide.
-    ## if a is provided, it predicts on the basis of the value of a
-    #' @export
-    mufun <- function(i, a) {
-        if(missing(i) & missing(a)){
-            stop('Conditional mean prediction requires either an index referring to an observed treatment (i), or a specific value of treatment (a)')
-        }
-        if(!missing(i)){
-            stopifnot(missing(a))
-            return(exp(mu_term + treat_term[i]))
-        }
-
-        if(!missing(a)){
-            stopifnot(missing(i))
-            nd <- mutate(prediction_locations, treatment = a)
-            predict(omodel, newdata = nd, type = 'response')
-        }
-    }
-
-    return(mufun)
-
-}
-
-## formula extractor
-## deconstruct formula and determine relevant terms, etc
-
-## this should be the principle function
-## it should receive datastructures representing the data, model specifications, control specs, prediction locations, and everything else
-## needed for ultimate use of the outcome model in causal estimation
-## it should also handle basis setup logic, and any other logic needed to make future use of the model proceed smoothly
-
-## we previously had a function here called outcome data
-## this should instead be a tibble representation of outcomes, and covariates
-
-## outcome_control is used for specifying model specific and parameter estimation details
-
-## quadrature_control can be a quadrature object, a set of specified NEED TO DETERMINE
-## optimizer_control is used for selecting the optimization parameters, and method of optimization
-## if method = 'gam' mgcv is used directly for estimation using the mgcv native defaults. Alternative methods may be provided
-## down the line if distributed optimization is required
-#' @export
-outcome_control <- function(quadrature_control,
-                            optimizer_control,
-                            gam_control,
-                            raster_control
-                            ){
-
+#' @exportS3Method
+print.Convspline.smooth <- function(ob, ...) {
+    cat("A Convolutional Spline Basis: \n ")
+    cat("Object names:\n")
+    cat(paste(names(ob), collapse = "   "))
+    cat("\n")
 }
 
 #' @export
@@ -235,24 +153,60 @@ mpl_prepare <- function(Y, Q,  ppcov = NULL, covariates = NULL, dimyx = c(128, 1
 }
 
 
-
-#'
-#' for_conv has been previously fourier transformed
-#' This function carries out the logic of convolving, and restructuring the data
 #' @export
-convolve_basis <- function(basis, pp_covariate) {
+convolve_basis <- function(basis, pp_covariate, resolution, distance_mask) {
+
+    covar_ix <- 1:resolution[1]
+    covar_iy <- 1:resolution[2]
+
+    basis_ix <- 1:resolution[1] 
+    basis_iy <- 1:resolution[2]
+    
+    out_ix <- (resolution[1] %/% 2) + 1:resolution[1]
+    out_iy <- (resolution[2] %/% 2) + 1:resolution[2]
+    
+    outbuf <- matrix(0, nrow = resolution[1], ncol = resolution[2])
+    buf1 <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    buf2 <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
 
     dims <- pp_covariate$dims
     window <- pp_covariate$window
 
-    basis <- fft(basis)
-    dim(basis) <- dims * 2
+    buf1[covar_ix, covar_iy] <- pp_covariate$covariate
+    buf2[basis_ix, basis_iy] <- basis * distance_mask
 
-    vec <- Re(fft(basis * pp_covariate$covariate, inverse = TRUE) / prod(dim(basis)))
-    Rcov(spatstat.geom::as.im(vec[1:dims[1], 1:dims[2]], W = window))
+    vec <- Re(fft(fft(buf1) * fft(buf2), inverse = TRUE)) / prod(2 * resolution)
+    outbuf[] <- vec[out_ix, out_iy]
+    outbuf[outbuf < 0] <- 0
+    Rcov(spatstat.geom::as.im(outbuf, W = window))
 }
 
+#' @export 
+scaled_gauss_kern <- function(scale) {
+    function(d) exp(-(d^2 ) / scale)
+}
 
+gauss_kern <- function(d) exp(-3 * d^2)
+
+#' @export
+pconv <- function(cov, kernel = gauss_kern, return_rast = FALSE, max_distance = sqrt(2)) {
+    
+    coords <- extract_coords(cov)
+    data <- extract_data(cov)
+    resolution <- data[[1]]$dims
+    xseq <- seq(from = -1L, to = 1L, length.out = resolution[1])
+    yseq <- seq(from = -1L, to = 1L, length.out = resolution[2])
+
+    distrast <- outer(xseq, yseq, function(x,y) sqrt(x^2 + y^2))
+    kern <- kernel(distrast)
+
+    rast <- convolve_basis(pp_covariate = data[[1]], basis = kern, resolution = resolution, distrast <= max_distance)
+    if (return_rast){
+        return(rast)
+    }
+    
+    spatstat.geom::interp.im(rast[[1]], x = coordx(coords), y = coordy(coords))
+}
 
 ## required mgcv function
 ## this function expects to receive data in the form of a covariate placeholder.
@@ -271,109 +225,138 @@ extract_basis_from_spec <- function(smooth_spec) {
 
 
 
-construct_conv_internal_basis <- function (object, data, knots ) {
-    ## TODO penalty order logic
-    n_right_boundary_knots <- 2L
-    n_left_boundary_knots <- 2L
-    
-    ## left boundary knots go negative
-    ## right boundary knots lead to hard cut off at desired value
-    
-    nknots <- object$bs.dim
-    if(nknots < 0) {
-        nknots <- 10
-        bs.dim <- 10
-    }
-    
-    extra <- object$xt
-    max_dist <- extra$max_distance
-
-    if(is.null(max_dist)) {
-        max_dist_prop <- extra$max_distance_proportion
-        ## TODO fix magic number default
-        if(is.null(max_dist_prop)) max_dist_prop = 0.25
-
-        max_dist <- max_dist_prop * get_max_distance(data)
-    }
-
-    lknots <- seq(from = 0, to = max_dist, length.out = (nknots + n_left_boundary_knots))
-    interval <- lknots[2] - lknots[1] 
-    lknots <- c(-2 * interval, -1 * interval, lknots)
-
-    if(is.null(knots)) knots <- list()
-    knots[["distances"]] <- lknots
-
-    basis_term <- extract_basis_from_spec(object)[-1]
-    if (is_empty(basis_term)) basis_term <- 'bs2'
-
-    intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim, xt = object$xt)
-    intern_call$label <- paste0('conv(', basis_term, ')')
-
-    ## internal basis construction including penalty
-    ## penalty calculated internally
-    local_data <- seq(from = 0, to = get_max_distance(data), length.out = 1000L)
-    
-    basis <- smooth.construct(intern_call, data = list(distances = local_data), knots = knots)
-
-    basis$internal_basis <- basis
-    basis$term <- object$term
-    basis
-}
-
 
 #' @exportS3Method
 smooth.construct.conv.smooth.spec <- function(object, data, knots) {
-    ## TODO
-    ## this should just be a standard Pcov
-    term <- object$term
-    coords <- data[[object$term]]
-    conv_data <- extract_data(coords)
+    odata <- data
+    data <- data[[object$term]]
     
     extra <- object$xt
-    ctxt <- extra$context
+    max_distance_prop <- extra$max_distance_prop
+    use_regularity <- extra$use_regularity
+    regularity_model <- extra$regularity_model
+
+    if(is.null(use_regularity)) use_regularity <- FALSE
+     if(is.null(regularity_model)) {
+        regularity_model <- "distance_gaussian"
+    } 
     
-    ## if (!is.null(ctxt)) {
-    ##     initial <- is.na(ctxt$context)
-    ## }
+    if(is.null(max_distance_prop)) max_distance_prop <- 1
+    ctxt <- extra$context
 
-    basis <- construct_conv_internal_basis(object, conv_data, knots)
-    bases <- vector(mode = 'list', length = length(conv_data))    
+    resolution <- object$xt$resolution
+    if (is.null(resolution)) resolution <- c(128, 128)
+
+    term <- object$term
+    
+    coords <- extract_coords(data)
+    conv_data <- extract_data(data)
 
 
-    for (i in seq_along(bases)){
-        current_pp <- conv_data[[i]]
+    if (regularity_model == "2d_gaussian") {
+        xseq <- seq(from = -1L, to = 1L, length.out = resolution[1])
+        yseq <- seq(from = -1L, to = 1L, length.out = resolution[2])
 
-        pred_dat <- list(distances = current_pp$distances)
+        xygrid <- expand_grid(y = yseq, x = xseq)
+        distrast <- outer(xseq, yseq, function(x,y) sqrt(x^2 + y^2))
+        clip <- distrast <= max_distance_prop
+        local_data <- list(x = xygrid$x, y = xygrid$y)
         
-        ## TODO uniquely at each distance
-        distance_design <- Predict.matrix(basis$internal_basis, data = pred_dat)
-        ## preallocate output design
-        convolutional_design <- distance_design * 0L
+        nknots <- object$bs.dim
 
-
-        ncols <- ncol(convolutional_design)
-        interp_basis <- vector(mode = 'list', length = ncols)
-
-        for(basis_index in 1:ncols)
-        {
-            to_conv <- distance_design[,basis_index]
-            lc <- convolve_basis ( to_conv, current_pp)
-            interp_basis[[basis_index]] <- lc
+        if(nknots < 1) {
+            nknots <- 10
+            object$bs.dim <- nknots
         }
-        bases[[i]] <- interp_basis
+        
+        lknots <- seq(from = -max_distance_prop, to = max_distance_prop, length.out = nknots)
+
+        ## TODO user supplied knots
+        knots <- list(x = lknots, y = lknots)
+
+
+        basis_term <- extract_basis_from_spec(object)[-1]
+        if (is_empty(basis_term)) basis_term <- 'bs2'
+
+        intern_call <- te(x,y,  fx = object$fixed, k = c(object$bs.dim, object$bs.dim))
+        intern_call$label <- paste0('conv(', object$term, ')')
+
+        basis <- smooth.construct(intern_call, data = local_data, knots = knots)
+
+        ## preallocate output design
+        distance_design <- basis$X
     }
 
-    e <<- environment()
+    if (regularity_model == "distance_gaussian") {
+        xseq <- seq(from = -1L, to = 1L, length.out = resolution[1])
+        yseq <- seq(from = -1L, to = 1L, length.out = resolution[2])
+
+
+        distrast <- outer(xseq, yseq, function(x,y) sqrt(x^2 + y^2))
+        local_data <- list(distances = c(distrast))
+        nknots <- object$bs.dim
+        distance_mask <- distrast <= max_distance_prop
+
+
+        if(nknots < 1) {
+            nknots <- 10
+            object$bs.dim <- nknots
+        }
+
+        n_right_boundary_knots <- 2L
+        n_left_boundary_knots <- 2L
+        
+        lknots <- seq(from = 0L, to = max_distance_prop * sqrt(2), length.out = (nknots + n_right_boundary_knots))
+
+        interval <- lknots[2] - lknots[1] 
+        lknots <- c(-2 * interval, -1 * interval, lknots)
+
+        ## TODO user supplied knots
+        knots <- list(distances = lknots)
+
+        basis_term <- extract_basis_from_spec(object)[-1]
+        if (is_empty(basis_term)) basis_term <- 'bs2'
+
+        intern_call <- s(distances,  bs = basis_term, fx = object$fixed, k = object$bs.dim, xt = object$xt)
+        intern_call$label <- paste0('conv(', object$term, ')')
+
+        basis <- smooth.construct(intern_call, data = local_data, knots = knots)
+
+        ## preallocate output design
+        distance_design <- basis$X
+        ## number of distinct Pcov values
+
+    }
+
+
+    current_pp <- conv_data[[1]]
+
+    ncols <- ncol(distance_design)
+    interp_basis <- vector(mode = 'list', length = ncols)
+
+    for(basis_index in 1:ncols)
+    {
+        interp_basis[[basis_index]] <- convolve_basis (distance_design[,basis_index], current_pp, resolution, distance_mask)
+    }
 
     ## then in this step apply this to each marked set seperately
     ## in that way everything is now pooled
-    basis$interpolation_basis <- bases
-    class(basis) <- 'Convspline.smooth'
-    basis$X <- Predict.matrix.Convspline.smooth(basis, data)
 
-    return(basis)
+    object$internal_basis <- basis
+    object$interpolation_basis <- interp_basis
+    object$evaluation_coords <- coords
+    object$window <- conv_data[[1]]$window
+    object$im_dims <- conv_data[[1]]$dims
+    object$local_data <- local_data
+    object$use_regularity <- use_regularity
+    object$regularity_model <- regularity_model
+    
+    class(object) <- 'Convspline.smooth'
+
+    object$X <- Predict.matrix.Convspline.smooth(object, odata)
+
+    return(object)
 }
-
 
 
 ## adaptive convolutions use a three dimensional convolution
@@ -383,26 +366,24 @@ smooth.construct.conv.smooth.spec <- function(object, data, knots) {
 
 #' @export
 Predict.matrix.Convspline.smooth <- function(object, data) {
-    coords <- data[[object$term]]
+
+    coords <- extract_coords(data[[object$term]])
+    
     interp_basis <- object$interpolation_basis
 
     ncoord <- length(coords)
     
-    nr <- ncoord * length(interp_basis)
+    nr <- ncoord 
     ## assumes all bases have same dimension which they certainly should
-    nc <- length(interp_basis[[1]])
+    nc <- length(interp_basis)
     Xmat <- matrix(0, nrow = nr, ncol = nc)
 
     for (i in 1:length(interp_basis)){
 
         locinterp <- interp_basis[[i]]
 
-        for (j in 1:nc){
-            ## e <<- environment()
-            row_range <- (((i - 1) * ncoord) + 1) : (((i) * ncoord) )
-            interp <- evaluate(locinterp[[j]], coords)
-            Xmat[row_range, j] <- interp
-        }
+        interp <- spatstat.geom::interp.im(locinterp[[1]], cbind(coordx(coords), coordy(coords)))
+        Xmat[, i] <- interp
     }
 
     Xmat
@@ -414,15 +395,28 @@ Predict.matrix.Convspline.smooth <- function(object, data) {
 
 
 
-#' sgam is a thin wrapper around gam that provides revision capabilities. 
-## 
-#' @export
-sgam <- function(formula, data, conv_control, ... ) {
-    fit <- gam(formula, data, conv_control, ...)
-    class(fit) <- c('sgam', class(fit))
+alg_environment <- function ( ){
+    e <-  rlang::env()
+
+    resolution <- c(128, 128)
+
+    e$cbuf_covariate <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    e$cbuf_basis <- matrix(0, nrow = resolution[1] * 2L, ncol = resolution[2] * 2L)
+    e$outbuf <- matrix(0, nrow = resolution[1], ncol = resolution[2])
+    e$drast <- outer(
+        X = seq(from = -1, to = 1, length.out = resolution[1]),
+        Y = seq(from = -1, to = 1, length.out = resolution[2]),
+        \(x,y) sqrt(x^2 + y^2))
+
+    covar_ix <- 1:resolution[1]
+    covar_iy <- 1:resolution[2]
+
+    basis_ix <- 1:resolution[1]
+    basis_iy <- 1:resolution[2]
+    
+    out_ix <- (resolution[1] %/% 2) + 1:resolution[1]
+    out_iy <- (resolution[2] %/% 2) + 1:resolution[2]
 }
-
-
 
 
 
@@ -434,8 +428,6 @@ sgam <- function(formula, data, conv_control, ... ) {
 spline_spec_test <- function ( ) {
     
 }
-
-
 
 
 ## TODO
@@ -496,4 +488,276 @@ update_exposure <- function(model, new_exposure) {
 
     model
 }
+updateF <- function(F, G,  offset){
+    G$offset <- offset
+    F <- gam(G = G, start = coef(F))
+    class(F) <- c("indirect_gam", class(F))
+    F
+}
+
+
+#' export
+indirect_gam <- function (
+                          formula,
+                          data,
+                          family,
+                          indir.max.iter = 30,
+                          delta.tol = 1e-6,
+                          ...)
+{
+    gam_ <- gam
+    ## G <- gam(formula = formula, family = family, data = data, offset = rep(0, nrow(data)), fit = FALSE)
+    G <- gam_(formula = formula, family = family, data = data, offset = rep(0, nrow(data)), fit = FALSE, ...)
+    F <- gam(G = G)
+    class(F) <- c("indirect_gam", class(F))
+
+    smooths <- F$smooth
+    conv_smooths <- keep(smooths, \(s)inherits(s, "Convspline.smooth") )
+    conv_smooths <- keep(conv_smooths, \(s) s$use_regularity)
+
+    offset <- F$offset
+
+    internal_bases <- map(conv_smooths, "internal_basis")
+    
+    lps <- predict(F, type = "lpmatrix")
+
+    regularity_fits <- vector("list", length(conv_smooths))
+    
+    for (iter in 1:indir.max.iter) {
+
+        if(iter != 1) {
+            last_fit <- regularity_fits[[i]]
+        }
+        offset <- offset * 0
+        for(i in 1:length(internal_bases)) {
+
+            if (iter == 1) {
+                conv_smooths[[i]]$indirect_fitting_complete <- FALSE
+            }
+            
+            if(conv_smooths[[i]]$indirect_fitting_complete) next
+            
+            coefs <- coef(F)
+            coef_name <- names(coefs)
+            ## add a zero intercept
+            start_coef_name <- stringr::str_detect(coef_name, conv_smooths[[i]]$term)
+            start_coef <- coefs[start_coef_name]
+
+            regularity_model <- conv_smooths[[i]]$regularity_model
+            
+            active <- internal_bases[[i]]
+
+            if (regularity_model == "distance_gaussian")
+            {
+                regularity_data <- data.frame(distances = seq(from = 0.01, to = sqrt(2), length.out = 500))
+                ob <- s(distances, bs = "bs2", k = active$bs.dim)
+                
+                Xp <- smoothCon(ob,
+                                data = regularity_data,
+                                knots = list(distances = active$knots),
+                                absorb.cons = TRUE)[[1]]$X
+                
+                current_term <- c(Xp %*% start_coef)
+                ## rescale and recenter regularity model
+                rescale <- min(current_term)
+                current_term <- current_term - rescale
+                regularity_data$current_term <- current_term
+
+                
+                gauss_fit <- nls(current_term ~    alpha * exp(- (distances - off )^2 / sigma),
+                                 data = regularity_data,
+                                 start = list(alpha = max(current_term), sigma = 1, off = 0),
+                                 lower = c(0, 0, 0),
+                                 algorithm = "port")
+
+                gauss_proj_coef <- lm.fit(Xp, fitted(gauss_fit))$coef
+
+                Xloc <- lps[,coef_name[start_coef_name]]
+                noff <- Xloc %*% gauss_proj_coef + rescale 
+                
+                offset <- offset + c(noff)
+            }  
+
+
+            if(regularity_model == "2d_gaussian") {
+                x <- seq(from = -1, to = 1, length.out = 100)
+                y <- seq(from = -1, to = 1, length.out = 100)
+                regularity_data <- expand_grid(x = x, y = y)
+
+                ob <- te(x, y, k = c(active$margin[[1]]$bs.dim, active$margin[[2]]$bs.dim))
+                Xp <- smoothCon(ob,
+                                data = regularity_data,
+                                absorb.cons = TRUE)[[1]]$X
+
+
+                current_term <- c(Xp %*% start_coef)
+                ## rescale and recenter regularity model
+                rescale <- min(current_term)
+                current_term <- current_term - rescale
+                regularity_data$current_term <- current_term
+
+
+                gauss_fit <- nls(current_term ~    alpha * exp(- (a * x^2 + b * y^2 + c * x * y) ),
+                                 data = regularity_data,
+                                 start = list(alpha = max(current_term), a = 1, b = 1, c = 0),
+                                 lower = c(1e-5, 1e-5, 1e-5, -10),
+                                 upper = c(1e5, 1e5, 1e5, 10),
+                                 algorithm = "port")
+                
+
+                gauss_proj_coef <- lm.fit(Xp, fitted(gauss_fit))$coef
+
+                Xloc <- lps[,coef_name[start_coef_name]]
+                noff <- Xloc %*% gauss_proj_coef + rescale 
+                
+                offset <- offset + c(noff)
+
+            }
+            if (iter != 1) {
+                delta <- max(abs(coef(last_fit) - coef(gauss_fit)))
+                if (delta < delta.tol) regularity_fits[[i]]$indirect_fitting_complete <- TRUE
+            }
+            
+            regularity_fits[[i]] <- gauss_fit
+        }
+
+        F <- updateF(F, G, offset)
+        F$regularity_fits <- regularity_fits
+    }
+    return(F)
+}
+
+
+
+
+
+
+
+indirect_bam <- function (
+                          formula,
+                          data,
+                          family,
+                          indir.max.iter = 10,
+                          delta.tol = 1e-5,
+
+                          ...)
+{
+
+    ## G <- gam(formula = formula, family = family, data = data, offset = rep(0, nrow(data)), fit = FALSE)
+    G <- bam(formula = formula, family = family, data = data, offset = rep(0, nrow(data)), fit = FALSE, ...)
+    F <- bam(G = G)
+    class(F) <- c("indirect_gam", class(F))
+
+    smooths <- F$smooth
+    conv_smooths <- keep(smooths, \(s)inherits(s, "Convspline.smooth") )
+    conv_smooths <- keep(conv_smooths, \(s) s$use_regularity)
+
+    offset <- F$offset
+
+    internal_bases <- map(conv_smooths, "internal_basis")
+    
+    lps <- predict(F, type = "lpmatrix")
+
+    for (iter in 1:indir.max.iter) {
+        if(iter != 1) {
+            last_fit <- gauss_fit
+        }
+        offset <- offset * 0
+        for(i in 1:length(internal_bases)) {
+            coefs <- coef(F)
+            coef_name <- names(coefs)
+            ## add a zero intercept
+            start_coef_name <- stringr::str_detect(coef_name, conv_smooths[[i]]$term)
+            start_coef <- coefs[start_coef_name]
+
+            regularity_model <- conv_smooths[[i]]$regularity_model
+            
+            active <- internal_bases[[i]]
+
+            if (regularity_model == "distance_gaussian")
+            {
+                regularity_data <- data.frame(distances = seq(from = 0.01, to = sqrt(2), length.out = 500))
+                ob <- s(distances, bs = "bs2", k = active$bs.dim)
+                
+                Xp <- smoothCon(ob,
+                                data = regularity_data,
+                                knots = list(distances = active$knots),
+                                absorb.cons = TRUE)[[1]]$X
+                
+                current_term <- c(Xp %*% start_coef)
+                ## rescale and recenter regularity model
+                rescale <- min(current_term)
+                current_term <- current_term - rescale
+                regularity_data$current_term <- current_term
+
+                
+                gauss_fit <- nls(current_term ~    alpha * exp(- (distances - off )^2 / sigma),
+                                 data = regularity_data,
+                                 start = list(alpha = max(current_term), sigma = 1, off = 0),
+                                 lower = c(0, 0, 0),
+                                 algorithm = "port")
+
+                gauss_proj_coef <- lm.fit(Xp, fitted(gauss_fit))$coef
+
+                Xloc <- lps[,coef_name[start_coef_name]]
+                noff <- Xloc %*% gauss_proj_coef + rescale 
+                
+                offset <- offset + c(noff)
+            }  
+
+
+            if(regularity_model == "2d_gaussian") {
+                x <- seq(from = -1, to = 1, length.out = 100)
+                y <- seq(from = -1, to = 1, length.out = 100)
+                regularity_data <- expand_grid(x = x, y = y)
+
+                ob <- te(x, y, k = c(active$margin[[1]]$bs.dim, active$margin[[2]]$bs.dim))
+                Xp <- smoothCon(ob,
+                                data = regularity_data,
+                                absorb.cons = TRUE)[[1]]$X
+
+
+                current_term <- c(Xp %*% start_coef)
+                ## rescale and recenter regularity model
+                rescale <- min(current_term)
+                current_term <- current_term - rescale
+                regularity_data$current_term <- current_term
+
+
+                gauss_fit <- nls(current_term ~    alpha * exp(- (a * x^2 + b * y^2 + c * x * y) ),
+                                 data = regularity_data,
+                                 start = list(alpha = max(current_term), a = 1, b = 1, c = 0),
+                                 lower = c(1e-5, 1e-5, 1e-5, -10),
+                                 upper = c(1e5, 1e5, 1e5, 10),
+                                 algorithm = "port")
+                
+
+                gauss_proj_coef <- lm.fit(Xp, fitted(gauss_fit))$coef
+
+                Xloc <- lps[,coef_name[start_coef_name]]
+                noff <- Xloc %*% gauss_proj_coef + rescale 
+                
+                offset <- offset + c(noff)
+
+            }
+
+
+            F$regularity_model <- gauss_fit
+
+            
+
+        }
+
+        F <- updateF(F, G, offset)
+    }
+    return(F)
+}
+
+
+
+
+
+
+
+
 

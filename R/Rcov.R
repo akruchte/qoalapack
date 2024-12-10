@@ -52,9 +52,14 @@ evaluate.Rcov <- function(object, locations, ...){
     x <- coordx(locations)
     y <- coordy(locations)
 
-    interpolator <- switch(attr(object, 'interpolator'),
-                           'bilin' = function(r) spatstat.geom::interp.im(r, x,y, bilinear = TRUE),
-                           'spatstat' = function(r) spatstat.geom::interp.im(r, x,y, bilinear = FALSE))
+    interpolation_choice <- attr(object, 'interpolator')
+    if (interpolation_choice == "bilin") {
+        interpolator <- function(r) spatstat.geom::interp.im(r, x,y, bilinear = TRUE)
+
+    }
+     if (interpolation_choice == "spatstat") {   
+         interpolator <-  function(r) spatstat.geom::interp.im(r, x,y, bilinear = FALSE)
+     }
 
     do.call(c, lapply(object, interpolator))
 }
@@ -68,6 +73,7 @@ format.Rcov <- function(r, ...){
 vec_ptype_abbr.Rcov <- function(r, ...){
     'Rcov'
 }
+
 
 #' @export
 Rcov_prepare <- function(object, ...) {
@@ -85,3 +91,20 @@ Rcov_prepare.default <- function(object, ...){
     stop(message)
 }
 
+
+
+
+if (FALSE){ 
+rasterize_road <- function(road, nr = 512, nc = 512) {
+    ovec <- vect(road)
+    orast <- rast(ovec, nr, nc)
+
+    linerast <- rasterize(ovec, orast, background = 0)
+    matrast <- as.matrix(linerast, wide = TRUE)
+
+    for (i in 1:ncol(matrast)){
+        matrast[,i] <- rev(matrast[,i])
+    }
+    spatstat.geom::im(matrast, xrange = c(bb$xmin, bb$xmax), yrange = c(bb$ymin, bb$ymax))
+}
+}

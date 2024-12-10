@@ -1,20 +1,18 @@
-##Lcov
+#' Linear Network Covariates
 
+#' Lcov is meant for processing of linear network data
+#' an object of type 'linnet' or sf MULTILINE objects can be handled as data input
+#' alternatively, a collection of LINE or MULTILINE objects can also be handled as data input
 
-## Lcov is meant for processing of linear network data
-## an object of type 'linnet' or sf MULTILINE objects can be handled as data input
-## alternatively, a collection of LINE or MULTILINE objects can also be handled as data input
-
-## Lcov can be used to process multiple covariates at the same time, each covariate will be given the name of the argument if provided,
-## or otherwise will simply be assigned the name of the symbol passed in
-## Lcov returns a representation of the point process containing the necessary components for setting up a convolutional basis representation.
-## The return value is a dummy vector of length 1 containing only placeholder numeric data (this may be used later to store genuinely useful information).
-## The attributes contain angle orientation and distance matrices for setup of the convolutional basis. It also contains the precomputed fft of the
-## pixellated version of the process
-## additional attributes include the oservation window of the process and the dimensions of the process
+#' Lcov can be used to process multiple covariates at the same time, each covariate will be given the name of the argument if provided,
+#' or otherwise will simply be assigned the name of the symbol passed in
+#' Lcov returns a representation of the point process containing the necessary components for setting up a convolutional basis representation.
+#' The return value is a dummy vector of length 1 containing only placeholder numeric data (this may be used later to store genuinely useful information).
+#' The attributes contain angle orientation and distance matrices for setup of the convolutional basis. It also contains the precomputed fft of the
+#' pixellated version of the process
+#' additional attributes include the oservation window of the process and the dimensions of the process
 #' @export
 Lcov <- function(..., dimyx = c(128, 128)){
-
   
   covars <- rlang::list2(...)
 
