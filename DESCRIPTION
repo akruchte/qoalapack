@@ -1,0 +1,33 @@
+Package: qoalapack
+Type: Package
+Title: Causal Inference with Spatio-Temporal Data and Modeling with Spatial Covariates
+Version: 1.0
+Date: 2024-08-15
+Author: Adam Kruchten
+Maintainer: Adam Kruchten <kruchten93@gmail.com>
+Description: Causal Inference with Spatio-Temporal Data and Modeling with Spatial Covariates
+License: GPL (>= 3)
+Encoding: UTF-8
+Imports: 
+    rlang,
+    vctrs,
+    splines,
+    terra,
+    mgcv,
+    sf,
+    spatstat.random,
+    spatstat.geom,
+    pracma,
+    R6,
+    SobolSequence
+LinkingTo:
+    Rcpp,
+    cpp11
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Depends: 
+    R (>= 2.10)
+LazyData: true

@@ -1,0 +1,12 @@
+.DS_Store
+.Rproj.user
+.Rhistory
+.Rdata
+.httr-oauth
+.quarto
+R/.\#varieties.R
+.rds
+*.Rd
+example_observed_response.pdf
+example_observed_response.pdf
+*.pdf
