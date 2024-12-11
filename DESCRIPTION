@@ -1,7 +1,7 @@
 Package: qoalapack
 Type: Package
 Title: Causal Inference with Spatio-Temporal Data and Modeling with Spatial Covariates
-Version: 1.0
+Version: 0.0.1
 Date: 2024-08-15
 Author: Adam Kruchten
 Maintainer: Adam Kruchten <kruchten93@gmail.com>
