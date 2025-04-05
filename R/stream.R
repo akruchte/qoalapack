@@ -37,11 +37,11 @@ x <- structure(2, class = "test")
     
 
     
-    declaration_proxy$initial_assignment(distribution)
-}
+    ## declaration_proxy$initial_assignment(distribution)
+## }
 
-Declare(X)
-X <- Normal()
+## Declare(X)
+## X <- Normal()
 
 
 
@@ -64,7 +64,7 @@ scdr <- function(s) {
     s[[2]]()
 }
 
-;;stream x num -> stream
+## ;;stream x num -> stream
 `+.stream` <- function (s, y ) {
     force(s)
     stream_c(scar(s) + y, scdr(s)  + y)
